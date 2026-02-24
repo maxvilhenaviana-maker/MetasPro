@@ -1,0 +1,21 @@
+{
+  "name": "MetasPro",
+  "short_name": "MetasPro",
+  "description": "Gestão profissional de metas e performance",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/Ícone MetasPro.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/Ícone MetasPro.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
