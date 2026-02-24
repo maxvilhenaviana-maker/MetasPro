@@ -3,18 +3,18 @@
   "name": "MetasPro - Gestão de Resultados",
   "icons": [
     {
-      "src": "/favicon.jpg",
+      "src": "favicon.jpg",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/jpeg"
     },
     {
-      "src": "/logo192.jpg",
+      "src": "logo192.jpg",
       "type": "image/jpeg",
       "sizes": "192x192",
       "purpose": "any maskable"
     },
     {
-      "src": "/logo512.jpg",
+      "src": "logo512.jpg",
       "type": "image/jpeg",
       "sizes": "512x512",
       "purpose": "any"
