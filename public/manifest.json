@@ -1,21 +1,27 @@
 {
-  "name": "MetasPro",
   "short_name": "MetasPro",
-  "description": "Gestão profissional de metas e performance",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#2563eb",
+  "name": "MetasPro - Gestão de Resultados",
   "icons": [
     {
-      "src": "/iconemetaspro.png",
-      "sizes": "192x192",
+      "src": "favicon.png",
+      "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/png"
     },
     {
-      "src": "/iconemetaspro.png",
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
       "sizes": "512x512",
-      "type": "image/png"
+      "purpose": "any"
     }
-  ]
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff"
 }
