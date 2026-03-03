@@ -1,45 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const PRESSURE_OPTIONS = [
-  { value: 'MODERADO',      label: 'Moderado',     pct: '25%',  desc: 'Atingível em 6 a 9 dos 12 períodos' },
-  { value: 'INTERMEDIARIO', label: 'Intermediário', pct: '50%',  desc: 'Atingível em 3 a 6 dos 12 períodos' },
-  { value: 'DESAFIADOR',    label: 'Desafiador',    pct: '75%',  desc: 'Atingível em 1 a 3 dos 12 períodos' },
-  { value: 'ALAVANCADO',    label: 'Alavancado',    pct: '100%', desc: 'Atingível apenas no ápice histórico' },
+  { value: 'MODERADO',      label: 'Moderado',      pct: '25%', desc: 'Atingível em 6 a 9 dos 12 períodos' },
+  { value: 'INTERMEDIARIO', label: 'Intermediário',  pct: '50%', desc: 'Atingível em 3 a 6 dos 12 períodos' },
+  { value: 'DESAFIADOR',    label: 'Desafiador',     pct: '75%', desc: 'Atingível em 1 a 3 dos 12 períodos' },
+  { value: 'ALAVANCADO',    label: 'Alavancado',     pct: '100%',desc: 'Atingível apenas no ápice histórico' },
 ];
-
-function formatNum(val) {
-  return Number(val).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
-}
 
 export default function GoalSandbox() {
   const navigate = useNavigate();
+  const resultRef = useRef(null);
 
-  const [inputs, setInputs]       = useState(Array(12).fill(''));
+  const [data, setData]           = useState(Array(12).fill(''));
   const [objective, setObjective] = useState('AUMENTAR');
   const [pressure, setPressure]   = useState('MODERADO');
   const [loading, setLoading]     = useState(false);
   const [result, setResult]       = useState(null);
-  const [errorMsg, setErrorMsg]   = useState('');
+  const [error, setError]         = useState('');
 
-  function handleInputChange(index, value) {
-    const next = [...inputs];
+  const handleDataChange = (index, value) => {
+    const next = [...data];
     next[index] = value;
-    setInputs(next);
-  }
+    setData(next);
+  };
 
-  const filledCount = inputs.filter(v => v !== '' && !isNaN(v)).length;
+  const filledValues = data.filter(v => v !== '' && !isNaN(v) && v !== null);
 
-  async function handleCalculate() {
-    setErrorMsg('');
+  const handleCalculate = async () => {
+    setError('');
     setResult(null);
 
-    const nums = inputs
-      .filter(v => v !== '' && !isNaN(v))
-      .map(Number);
+    const nums = data.map(v => (v === '' ? null : Number(v)));
+    const valid = nums.filter(v => v !== null && !isNaN(v));
 
-    if (nums.length < 6) {
-      setErrorMsg('Preencha pelo menos 6 períodos para uma análise confiável.');
+    if (valid.length < 6) {
+      setError('Preencha pelo menos 6 períodos para uma análise confiável.');
       return;
     }
 
@@ -48,191 +44,240 @@ export default function GoalSandbox() {
       const response = await fetch('/api/sandbox-calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ historicalData: nums, objective, pressureLevel: pressure }),
+        body: JSON.stringify({
+          historicalData: nums.filter(v => v !== null),
+          objective,
+          pressureLevel: pressure,
+        }),
       });
+
       const json = await response.json();
+
       if (!response.ok) {
-        setErrorMsg(json.error || 'Erro ao calcular. Tente novamente.');
+        setError(json.error || 'Erro ao calcular. Tente novamente.');
       } else {
         setResult(json);
+        setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
       }
-    } catch {
-      setErrorMsg('Falha de conexão com o servidor. Tente novamente.');
+    } catch (err) {
+      setError('Falha de conexão com o servidor. Tente novamente.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }
+  };
+
+  const selectedPressure = PRESSURE_OPTIONS.find(p => p.value === pressure);
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg,#f1f5f9,#eff6ff)', padding: '24px 16px' }}>
-      <div style={{ maxWidth: 680, margin: '0 auto' }}>
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-blue-50 p-4 md:p-10">
+      <div className="max-w-3xl mx-auto">
 
-        {/* ── Header ── */}
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <h1 style={{ fontSize: 28, fontWeight: 900, color: '#0f172a', margin: 0 }}>
-            Metas<span style={{ color: '#2563eb' }}>Pro</span>
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-extrabold text-slate-900">
+            Metas<span className="text-blue-600">Pro</span>
           </h1>
-          <p style={{ color: '#94a3b8', marginTop: 6, fontSize: 14 }}>
+          <p className="text-slate-500 mt-1 text-sm">
             🧪 Sandbox — experimente o cálculo inteligente de metas, sem cadastro
           </p>
         </div>
 
-        <div style={{ background: '#fff', borderRadius: 24, boxShadow: '0 8px 40px rgba(0,0,0,0.08)', padding: 32 }}>
+        <div className="bg-white rounded-3xl shadow-xl p-8 border border-slate-100 space-y-8">
 
-          {/* ── 1. Objetivo ── */}
-          <div style={{ marginBottom: 28 }}>
-            <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 12 }}>
+          {/* Botão Voltar */}
+          <button
+            onClick={() => navigate('/login')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, padding: 0 }}
+          >
+            ← Voltar
+          </button>
+
+          {/* Objetivo */}
+          <section>
+            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">
               1. Objetivo da Meta
-            </span>
-            <div style={{ display: 'flex', gap: 12 }}>
-              {['AUMENTAR', 'REDUZIR'].map(opt => {
-                const active = objective === opt;
-                return (
-                  <button key={opt} onClick={() => setObjective(opt)} style={{
-                    flex: 1, padding: '12px 8px', borderRadius: 14, fontWeight: 700, fontSize: 14,
-                    cursor: 'pointer', border: `2px solid ${active ? '#2563eb' : '#e2e8f0'}`,
-                    background: active ? '#2563eb' : '#f8fafc', color: active ? '#fff' : '#475569',
-                  }}>
-                    {opt === 'AUMENTAR' ? '📈 Aumentar' : '📉 Reduzir'}
-                  </button>
-                );
-              })}
+            </h2>
+            <div className="flex gap-3">
+              {['AUMENTAR', 'REDUZIR'].map(opt => (
+                <button
+                  key={opt}
+                  onClick={() => setObjective(opt)}
+                  className={`flex-1 py-3 rounded-2xl font-semibold text-sm transition-all border
+                    ${objective === opt
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue-300'}`}
+                >
+                  {opt === 'AUMENTAR' ? '📈 Aumentar resultados' : '📉 Reduzir resultados'}
+                </button>
+              ))}
             </div>
-            <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>
-              {objective === 'AUMENTAR' ? 'Ex.: volume de vendas, receita, produção' : 'Ex.: custo de aquisição, taxa de rejeição, devoluções'}
+            <p className="text-xs text-slate-400 mt-2 ml-1">
+              {objective === 'AUMENTAR'
+                ? 'Ex.: volume de vendas, receita, produção'
+                : 'Ex.: custo de aquisição, taxa de rejeição, devoluções'}
             </p>
-          </div>
+          </section>
 
-          {/* ── 2. Pressão ── */}
-          <div style={{ marginBottom: 28 }}>
-            <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 12 }}>
+          {/* Nível de Pressão */}
+          <section>
+            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">
               2. Nível de Pressão
-            </span>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              {PRESSURE_OPTIONS.map(opt => {
-                const active = pressure === opt.value;
-                return (
-                  <button key={opt.value} onClick={() => setPressure(opt.value)} style={{
-                    padding: '14px 12px', borderRadius: 14, textAlign: 'left', cursor: 'pointer',
-                    border: `2px solid ${active ? '#2563eb' : '#e2e8f0'}`,
-                    background: active ? '#2563eb' : '#f8fafc', color: active ? '#fff' : '#334155',
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                      <span style={{ fontWeight: 700, fontSize: 14 }}>{opt.label}</span>
-                      <span style={{
-                        fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
-                        background: active ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
-                        color: active ? '#fff' : '#475569',
-                      }}>{opt.pct}</span>
-                    </div>
-                    <p style={{ fontSize: 11, margin: 0, color: active ? 'rgba(255,255,255,0.8)' : '#94a3b8' }}>{opt.desc}</p>
-                  </button>
-                );
-              })}
+            </h2>
+            <div className="grid grid-cols-2 gap-3">
+              {PRESSURE_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setPressure(opt.value)}
+                  className={`p-4 rounded-2xl text-left transition-all border
+                    ${pressure === opt.value
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-blue-300'}`}
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-sm">{opt.label}</span>
+                    <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full
+                      ${pressure === opt.value ? 'bg-white text-blue-600' : 'bg-slate-200 text-slate-600'}`}>
+                      {opt.pct}
+                    </span>
+                  </div>
+                  <p className={`text-xs mt-1 ${pressure === opt.value ? 'text-blue-100' : 'text-slate-400'}`}>
+                    {opt.desc}
+                  </p>
+                </button>
+              ))}
             </div>
-          </div>
+          </section>
 
-          {/* ── 3. Histórico ── */}
-          <div style={{ marginBottom: 28 }}>
-            <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>
+          {/* Dados históricos */}
+          <section>
+            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">
               3. Resultados Históricos
-            </span>
-            <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 14 }}>
+            </h2>
+            <p className="text-xs text-slate-400 mb-4">
               Insira os últimos resultados (mínimo 6, ideal 12). Deixe em branco os períodos sem dado.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-              {inputs.map((v, i) => (
-                <div key={i} style={{ position: 'relative' }}>
-                  <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: '#94a3b8', pointerEvents: 'none' }}>
+            <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+              {data.map((v, i) => (
+                <div key={i} className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">
                     P{i + 1}
                   </span>
                   <input
                     type="number"
                     value={v}
+                    onChange={e => handleDataChange(i, e.target.value)}
                     placeholder="—"
-                    onChange={e => handleInputChange(i, e.target.value)}
-                    style={{ width: '100%', paddingLeft: 28, paddingRight: 6, paddingTop: 10, paddingBottom: 10, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                    className="w-full pl-8 pr-2 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 transition-all"
                   />
                 </div>
               ))}
             </div>
-            <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>{filledCount} de 12 períodos preenchidos</p>
-          </div>
+            <p className="text-xs text-slate-400 mt-2">
+              {filledValues.length} de 12 períodos preenchidos
+            </p>
+          </section>
 
-          {/* ── Erro ── */}
-          {errorMsg && (
-            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 13, borderRadius: 14, padding: '12px 16px', marginBottom: 16 }}>
-              ⚠️ {errorMsg}
+          {/* Erro */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl px-5 py-3">
+              ⚠️ {error}
             </div>
           )}
 
-          {/* ── Botão ── */}
-          <button onClick={handleCalculate} disabled={loading} style={{
-            width: '100%', padding: 16, background: loading ? '#93c5fd' : '#2563eb',
-            color: '#fff', fontWeight: 700, fontSize: 16, borderRadius: 14, border: 'none',
-            cursor: loading ? 'not-allowed' : 'pointer', boxShadow: '0 4px 16px rgba(37,99,235,0.25)',
-          }}>
-            {loading ? '⏳ Analisando com IA...' : '🚀 Calcular Meta com IA'}
+          {/* Botão calcular */}
+          <button
+            onClick={handleCalculate}
+            disabled={loading}
+            className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold rounded-2xl shadow-lg transition-all text-base"
+          >
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+                Analisando com IA...
+              </span>
+            ) : '🚀 Calcular Meta com IA'}
           </button>
 
-          {/* ── Resultado ── */}
+          {/* Resultado */}
           {result && (
-            <div style={{ marginTop: 28, borderTop: '1px solid #f1f5f9', paddingTop: 24 }}>
+            <div ref={resultRef} className="space-y-5 pt-2 border-t border-slate-100">
 
               {/* Outliers */}
-              {result.outliersExcluidos?.length > 0 ? (
-                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 16, padding: 18, marginBottom: 16 }}>
-                  <p style={{ fontWeight: 700, color: '#92400e', fontSize: 13, marginBottom: 6 }}>🔍 Outliers identificados pela IA</p>
-                  <p style={{ color: '#78350f', fontSize: 13, marginBottom: 8 }}>
-                    Valores excluídos: <strong style={{ fontFamily: 'monospace' }}>{result.outliersExcluidos.join(' · ')}</strong>
+              {result.outliersExcluidos?.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+                  <h3 className="font-bold text-amber-800 mb-2 text-sm">
+                    🔍 Outliers identificados pela IA
+                  </h3>
+                  <p className="text-amber-700 text-sm mb-3">
+                    Valores excluídos da média:{' '}
+                    <span className="font-mono font-bold">
+                      {result.outliersExcluidos.join(' · ')}
+                    </span>
                   </p>
-                  <p style={{ color: '#92400e', fontSize: 12, lineHeight: 1.6, margin: 0 }}>{result.justificativaOutliers}</p>
-                </div>
-              ) : (
-                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 16, padding: 14, marginBottom: 16 }}>
-                  <p style={{ color: '#166534', fontSize: 13, margin: 0 }}>✅ Nenhum outlier identificado — todos os valores foram considerados.</p>
+                  <p className="text-amber-600 text-xs leading-relaxed">
+                    {result.justificativaOutliers}
+                  </p>
                 </div>
               )}
 
-              {/* Cards de números */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
-                {[
-                  { label: 'Média limpa',   val: result.mediaCalculada, blue: false },
-                  { label: 'Intervalo M',   val: result.intervaloM,     blue: false },
-                  { label: 'Meta sugerida', val: result.metaFinal,      blue: true  },
-                ].map(item => (
-                  <div key={item.label} style={{ background: item.blue ? '#2563eb' : '#f8fafc', borderRadius: 16, padding: '16px 8px', textAlign: 'center', boxShadow: item.blue ? '0 4px 16px rgba(37,99,235,0.3)' : 'none' }}>
-                    <p style={{ fontSize: 11, color: item.blue ? '#bfdbfe' : '#94a3b8', margin: '0 0 4px' }}>{item.label}</p>
-                    <p style={{ fontSize: 20, fontWeight: 900, color: item.blue ? '#fff' : '#0f172a', margin: 0 }}>{formatNum(item.val)}</p>
-                  </div>
-                ))}
+              {/* Números principais */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-slate-50 rounded-2xl p-4 text-center">
+                  <p className="text-xs text-slate-400 mb-1">Média limpa</p>
+                  <p className="text-xl font-extrabold text-slate-800">
+                    {Number(result.mediaCalculada).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="bg-slate-50 rounded-2xl p-4 text-center">
+                  <p className="text-xs text-slate-400 mb-1">Intervalo M</p>
+                  <p className="text-xl font-extrabold text-slate-800">
+                    {Number(result.intervaloM).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="bg-blue-600 rounded-2xl p-4 text-center shadow-md">
+                  <p className="text-xs text-blue-100 mb-1">Meta sugerida</p>
+                  <p className="text-xl font-extrabold text-white">
+                    {Number(result.metaFinal).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}
+                  </p>
+                </div>
               </div>
 
-              {/* Justificativa */}
-              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 16, padding: 18, marginBottom: 20 }}>
-                <p style={{ fontWeight: 700, color: '#1e40af', fontSize: 13, marginBottom: 6 }}>💡 Por que esta meta foi sugerida?</p>
-                <p style={{ color: '#1d4ed8', fontSize: 13, lineHeight: 1.7, margin: 0 }}>{result.justificativaMeta}</p>
+              {/* Justificativa da meta */}
+              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5">
+                <h3 className="font-bold text-blue-800 mb-2 text-sm">
+                  💡 Por que esta meta foi sugerida?
+                </h3>
+                <p className="text-blue-700 text-sm leading-relaxed">
+                  {result.justificativaMeta}
+                </p>
               </div>
 
-              {/* CTA */}
-              <div style={{ background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', borderRadius: 18, padding: '24px 20px', textAlign: 'center' }}>
-                <p style={{ fontWeight: 800, fontSize: 17, color: '#fff', margin: '0 0 6px' }}>Gostou? Crie sua conta gratuitamente.</p>
-                <p style={{ color: '#bfdbfe', fontSize: 13, margin: '0 0 18px' }}>Com conta você salva metas, registra resultados e acompanha seu desempenho em dashboards.</p>
-                <button onClick={() => navigate('/login')} style={{ background: '#fff', color: '#2563eb', fontWeight: 700, padding: '12px 32px', borderRadius: 12, border: 'none', cursor: 'pointer', fontSize: 15 }}>
-                  Criar conta grátis →
+              {/* CTA para criar conta */}
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 text-center text-white">
+                <p className="font-bold text-lg mb-1">Gostou? Crie sua conta.</p>
+                <p className="text-blue-100 text-sm mb-4">
+                  Com conta você salva metas, registra resultados e acompanha seu desempenho em dashboards.
+                </p>
+                <button
+                  onClick={() => navigate('/login')}
+                  className="bg-white text-blue-700 font-bold px-8 py-3 rounded-xl shadow hover:bg-blue-50 transition-all"
+                >
+                  Criar conta →
                 </button>
               </div>
-
             </div>
           )}
 
         </div>
 
-        <p style={{ textAlign: 'center', fontSize: 12, color: '#94a3b8', marginTop: 20 }}>
-          <button onClick={() => navigate('/login')} style={{ background: 'none', border: 'none', color: '#94a3b8', textDecoration: 'underline', cursor: 'pointer', fontSize: 12 }}>
+        <p className="text-center text-xs text-slate-400 mt-6">
+          <button onClick={() => navigate('/login')} className="underline hover:text-slate-600">
             Já tenho conta — entrar
           </button>
         </p>
-
       </div>
     </div>
   );
