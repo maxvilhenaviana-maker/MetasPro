@@ -9,7 +9,6 @@ const PRESSURE_OPTIONS = [
 ];
 
 // ─── Formata número para exibição nos cards de resultado ─────────────────────
-// Ex: 1.500.000 → "1,5M" | 25.000 → "25K" | 850 → "850"
 function formatResultValue(value) {
   const num = Number(value);
   if (isNaN(num)) return value;
@@ -36,6 +35,43 @@ function inputFontSize(value) {
   if (len >= 8)  return '10px';
   if (len >= 6)  return '11px';
   return '13px';
+}
+
+// ─── Monta mensagem formatada para o WhatsApp ─────────────────────────────────
+function buildWhatsAppMessage(result, objective, pressure) {
+  const pressureLabel = {
+    MODERADO:      'Moderado (25%)',
+    INTERMEDIARIO: 'Intermediário (50%)',
+    DESAFIADOR:    'Desafiador (75%)',
+    ALAVANCADO:    'Alavancado (100%)',
+  }[pressure] || pressure;
+
+  const objectiveLabel = objective === 'AUMENTAR' ? '📈 Aumentar' : '📉 Reduzir';
+
+  const fmt = (v) => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+
+  let msg = '';
+  msg += `🎯 *MetasPro — Resultado do Cálculo*\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `*Objetivo:* ${objectiveLabel}\n`;
+  msg += `*Nível de pressão:* ${pressureLabel}\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `📊 *Média histórica limpa:* ${fmt(result.mediaCalculada)}\n`;
+  msg += `📐 *Intervalo M:* ${fmt(result.intervaloM)}\n`;
+  msg += `✅ *Meta sugerida:* *${fmt(result.metaFinal)}*\n`;
+
+  if (result.outliersExcluidos?.length > 0) {
+    msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `🔍 *Outliers excluídos:* ${result.outliersExcluidos.map(fmt).join(', ')}\n`;
+    msg += `_${result.justificativaOutliers}_\n`;
+  }
+
+  msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `💡 *Análise:*\n${result.justificativaMeta}\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `_Calculado pelo MetasPro — metaspro.com.br_`;
+
+  return encodeURIComponent(msg);
 }
 
 export default function GoalSandbox() {
@@ -96,7 +132,10 @@ export default function GoalSandbox() {
     }
   };
 
-  const selectedPressure = PRESSURE_OPTIONS.find(p => p.value === pressure);
+  const handleWhatsApp = () => {
+    const msg = buildWhatsAppMessage(result, objective, pressure);
+    window.open(`https://wa.me/?text=${msg}`, '_blank');
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 to-blue-50 p-4 md:p-10">
@@ -189,7 +228,6 @@ export default function GoalSandbox() {
             <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
               {data.map((v, i) => (
                 <div key={i} className="relative">
-                  {/* Label P1..P12 fixo no topo esquerdo */}
                   <span className="absolute left-2 top-1 text-[9px] text-slate-400 pointer-events-none leading-none">
                     P{i + 1}
                   </span>
@@ -260,20 +298,20 @@ export default function GoalSandbox() {
                 </div>
               )}
 
-              {/* Números principais — exibe abreviado com tooltip do valor completo */}
+              {/* Números principais */}
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: 'Média limpa',    value: result.mediaCalculada, bg: 'bg-slate-50',  text: 'text-slate-800' },
-                  { label: 'Intervalo M',    value: result.intervaloM,     bg: 'bg-slate-50',  text: 'text-slate-800' },
-                  { label: 'Meta sugerida',  value: result.metaFinal,      bg: 'bg-blue-600',  text: 'text-white',   sub: 'text-blue-100' },
+                  { label: 'Média limpa',   value: result.mediaCalculada, bg: 'bg-slate-50', text: 'text-slate-800' },
+                  { label: 'Intervalo M',   value: result.intervaloM,     bg: 'bg-slate-50', text: 'text-slate-800' },
+                  { label: 'Meta sugerida', value: result.metaFinal,      bg: 'bg-blue-600', text: 'text-white', sub: 'text-blue-100' },
                 ].map(({ label, value, bg, text, sub }) => (
-                  <div key={label} className={`${bg} rounded-2xl p-4 text-center shadow-sm`} title={Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}>
+                  <div key={label} className={`${bg} rounded-2xl p-4 text-center shadow-sm`}
+                       title={Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}>
                     <p className={`text-xs mb-1 ${sub || 'text-slate-400'}`}>{label}</p>
                     <p className={`font-extrabold ${text} leading-tight`}
                        style={{ fontSize: formatResultValue(value).length > 7 ? '14px' : '20px' }}>
                       {formatResultValue(value)}
                     </p>
-                    {/* Valor completo abaixo do abreviado, em fonte menor */}
                     {formatResultValue(value) !== Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) && (
                       <p className={`text-[9px] mt-0.5 ${sub || 'text-slate-400'} opacity-70 font-mono`}>
                         {Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}
@@ -293,6 +331,21 @@ export default function GoalSandbox() {
                 </p>
               </div>
 
+              {/* ── Botão WhatsApp ── */}
+              <button
+                onClick={handleWhatsApp}
+                className="w-full py-4 rounded-2xl font-bold text-white text-base shadow-lg transition-all flex items-center justify-center gap-3"
+                style={{ backgroundColor: '#25D366' }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#1ebe5d'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#25D366'}
+              >
+                {/* Ícone WhatsApp SVG oficial */}
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                </svg>
+                Compartilhar resultado via WhatsApp
+              </button>
+
               {/* CTA para criar conta */}
               <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 text-center text-white">
                 <p className="font-bold text-lg mb-1">Gostou? Crie sua conta.</p>
@@ -306,6 +359,7 @@ export default function GoalSandbox() {
                   Criar conta →
                 </button>
               </div>
+
             </div>
           )}
 
