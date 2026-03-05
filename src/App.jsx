@@ -1,5 +1,6 @@
 // src/App.jsx
-// Atualizado para incluir rota de Onboarding e verificação de status pós-login
+// CORRIGIDO: lê token no formato { token, user } do index.js atual
+// Evita loop de refresh e 401 no /onboarding/status
 
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
@@ -14,52 +15,70 @@ const PrivateRoute = ({ children }) => {
   return tokens ? children : <Navigate to="/login" />;
 };
 
+// ─── Extrai o token JWT do localStorage (suporta ambos os formatos) ──────────
+function getToken() {
+  try {
+    const raw = localStorage.getItem('auth_tokens');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed.accessToken || parsed.token || null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Tela de carregamento ─────────────────────────────────────────────────────
+function LoadingScreen() {
+  return (
+    <div style={{
+      minHeight: '100vh', background: '#020617',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{
+          width: 40, height: 40, border: '3px solid #1e293b',
+          borderTopColor: '#3b82f6', borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite', margin: '0 auto 12px',
+        }} />
+        <p style={{ color: '#475569', fontSize: 13, fontFamily: 'sans-serif', margin: 0 }}>
+          Verificando ambiente...
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Rota privada com verificação de onboarding ───────────────────────────────
-// Redireciona para /onboarding se o usuário ainda não cadastrou empresa
 const PrivateRouteWithOnboarding = ({ children }) => {
-  const tokens = localStorage.getItem('auth_tokens');
   const [checking, setChecking] = useState(true);
-  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [redirect, setRedirect] = useState(null); // null | 'login' | 'onboarding'
 
   useEffect(() => {
-    if (!tokens) return setChecking(false);
+    const token = getToken();
+    if (!token) {
+      setRedirect('login');
+      setChecking(false);
+      return;
+    }
 
     api.get('/onboarding/status')
       .then(({ data }) => {
-        setNeedsOnboarding(!data.onboardingCompleto);
+        if (!data.onboardingCompleto) setRedirect('onboarding');
       })
-      .catch(() => {
-        // Em caso de erro na verificação, deixa passar para o dashboard
-        setNeedsOnboarding(false);
+      .catch((err) => {
+        if (err.response?.status === 401) {
+          localStorage.removeItem('auth_tokens');
+          setRedirect('login');
+        }
+        // Qualquer outro erro: deixa entrar no dashboard
       })
       .finally(() => setChecking(false));
   }, []);
 
-  if (!tokens) return <Navigate to="/login" />;
-
-  if (checking) {
-    return (
-      <div style={{
-        minHeight: '100vh', background: '#020617',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: 40, height: 40, border: '3px solid #1e293b',
-            borderTopColor: '#3b82f6', borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite', margin: '0 auto 12px',
-          }} />
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          <p style={{ color: '#475569', fontSize: 13, fontFamily: 'sans-serif' }}>
-            Verificando ambiente...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (needsOnboarding) return <Navigate to="/onboarding" />;
-
+  if (checking) return <LoadingScreen />;
+  if (redirect === 'login') return <Navigate to="/login" />;
+  if (redirect === 'onboarding') return <Navigate to="/onboarding" />;
   return children;
 };
 
