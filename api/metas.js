@@ -238,6 +238,68 @@ module.exports = async function handler(req, res) {
     }
   }
 
+  // ── GET /api/metas/config/:id ────────────────────────────────────────────
+  // Carrega dados de uma meta existente para pré-preencher o wizard no modo edição
+  if (req.method === 'GET' && url.includes('/config/')) {
+    try {
+      const user     = autenticar(req);
+      const configId = url.split('/config/')[1]?.split('?')[0];
+
+      const cfgRes = await pool.query(
+        `SELECT cm.*, um.empresa_id
+         FROM configuracoes_metas cm
+         JOIN unidades_monitoradas um ON um.id = cm.unidade_id
+         WHERE cm.id = $1`,
+        [configId]
+      );
+      if (cfgRes.rows.length === 0) {
+        return res.status(404).json({ error: 'Meta não encontrada.' });
+      }
+      const cfg = cfgRes.rows[0];
+
+      const perm = await pool.query(
+        `SELECT papel FROM empresa_usuarios
+         WHERE empresa_id = $1 AND usuario_id = $2 AND ativo = true`,
+        [cfg.empresa_id, user.id]
+      );
+      if (perm.rows.length === 0) {
+        return res.status(403).json({ error: 'Sem permissão para esta meta.' });
+      }
+
+      const histRes = await pool.query(
+        `SELECT valor FROM historicos_indicadores
+         WHERE configuracao_meta_id = $1
+         ORDER BY periodo_referencia ASC`,
+        [configId]
+      );
+
+      const pressaoMap = {
+        '0.25': 'MODERADO', '0.50': 'INTERMEDIARIO',
+        '0.75': 'DESAFIADOR', '1.00': 'ALAVANCADO',
+        '0.5': 'INTERMEDIARIO', '1': 'ALAVANCADO',
+      };
+      const nivelLabel = pressaoMap[String(Number(cfg.nivel_pressao).toFixed(2))] || 'MODERADO';
+
+      return res.status(200).json({
+        id:                      cfg.id,
+        nome_meta:               cfg.nome_meta,
+        unidade_id:              cfg.unidade_id,
+        objetivo_descritivo:     cfg.objetivo_descritivo || '',
+        abrangencia:             cfg.abrangencia         || 'OPERACIONAL',
+        apresentacao:            cfg.apresentacao        || 'NUMERO',
+        direcao:                 cfg.direcao,
+        periodicidade_resultado: cfg.periodicidade_resultado,
+        nivel_pressao_label:     nivelLabel,
+        historico:               histRes.rows.map(r => Number(r.valor)),
+      });
+
+    } catch (err) {
+      console.error('[metas/config]', err.message);
+      if (err.message.includes('Token')) return res.status(401).json({ error: err.message });
+      return res.status(500).json({ error: 'Erro ao carregar meta.' });
+    }
+  }
+
   // ── POST /api/metas/calcular ─────────────────────────────────────────────
   if (req.method === 'POST' && url.endsWith('/calcular')) {
     try {
