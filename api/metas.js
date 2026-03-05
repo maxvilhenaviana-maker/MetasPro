@@ -206,6 +206,73 @@ module.exports = async function handler(req, res) {
 
   const url = req.url || '';
 
+  // ── GET /api/metas/lista ─────────────────────────────────────────────────
+  // Lista todas as metas do usuário com dados consolidados para o dashboard
+  if (req.method === 'GET' && url.endsWith('/lista')) {
+    try {
+      const user = autenticar(req);
+
+      // Busca a empresa do usuário
+      const empRes = await pool.query(
+        `SELECT empresa_id FROM empresa_usuarios WHERE usuario_id = $1 AND ativo = true LIMIT 1`,
+        [user.id]
+      );
+      if (empRes.rows.length === 0) {
+        return res.status(200).json([]);
+      }
+      const empresaId = empRes.rows[0].empresa_id;
+
+      // Busca metas com dados consolidados do ciclo mais recente e análise da IA
+      const result = await pool.query(
+        `SELECT
+           cm.id                        AS config_id,
+           cm.nome_meta,
+           cm.direcao,
+           cm.nivel_pressao,
+           cm.periodicidade_resultado,
+           cm.apresentacao,
+           cm.abrangencia,
+           cm.objetivo_descritivo,
+           cm.criado_em,
+           um.nome_unidade,
+           um.codigo_unidade,
+           -- Dados do ciclo mais recente
+           ciclo.valor_meta_aprovado    AS valor_meta_final,
+           -- Dados da análise IA mais recente
+           ai.media_calculada,
+           ai.intervalo_m,
+           ai.justificativa_meta
+         FROM configuracoes_metas cm
+         JOIN unidades_monitoradas um ON um.id = cm.unidade_id
+         LEFT JOIN LATERAL (
+           SELECT valor_meta_aprovado
+           FROM ciclos_metas
+           WHERE configuracao_meta_id = cm.id
+           ORDER BY criado_em DESC
+           LIMIT 1
+         ) ciclo ON true
+         LEFT JOIN LATERAL (
+           SELECT media_calculada, intervalo_m, justificativa_meta
+           FROM analises_ia
+           WHERE configuracao_meta_id = cm.id
+           ORDER BY criado_em DESC
+           LIMIT 1
+         ) ai ON true
+         WHERE um.empresa_id = $1
+           AND cm.ativo = true
+         ORDER BY cm.criado_em DESC`,
+        [empresaId]
+      );
+
+      return res.status(200).json(result.rows);
+
+    } catch (err) {
+      console.error('[metas/lista]', err.message);
+      if (err.message.includes('Token')) return res.status(401).json({ error: err.message });
+      return res.status(500).json({ error: 'Erro ao listar metas.' });
+    }
+  }
+
   // ── GET /api/metas/unidades/:empresa_id ──────────────────────────────────
   if (req.method === 'GET' && url.includes('/unidades/')) {
     try {
