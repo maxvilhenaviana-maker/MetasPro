@@ -1,74 +1,274 @@
+// src/pages/Login.jsx
+// Tela de Login — MetasPro
+// Design: clean, fundo branco, paleta azul marinho + verde MetasPro
+// Redireciona para /inicial (não mais para /dashboard)
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import api from '../services/api';
+import { T, globalCSS } from '../theme';
 
 export default function Login() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '', password: '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const handleAuth = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
     try {
       const endpoint = isRegistering ? '/auth/register' : '/auth/login';
-      const { data } = await api.post(endpoint, formData);
+      const payload  = isRegistering
+        ? { nome: formData.name, email: formData.email, senha: formData.password }
+        : { email: formData.email, senha: formData.password };
+      const { data } = await api.post(endpoint, payload);
       localStorage.setItem('auth_tokens', JSON.stringify(data));
-      navigate('/dashboard');
+      navigate('/inicial');
     } catch (err) {
-      alert(err.response?.data?.error || 'Erro na autenticação.');
+      setError(err.response?.data?.error || 'Erro ao autenticar. Verifique seus dados.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const onSuccessGoogle = async (response) => {
+  const onSuccessGoogle = async (credentialResponse) => {
+    setLoading(true);
+    setError('');
     try {
-      const { data } = await api.post('/auth/google', { credential: response.credential });
+      const { data } = await api.post('/auth/google', { credential: credentialResponse.credential });
       localStorage.setItem('auth_tokens', JSON.stringify(data));
-      navigate('/dashboard');
-    } catch (err) {
-      alert('Erro no Google Login');
+      navigate('/inicial');
+    } catch {
+      setError('Erro ao autenticar com Google. Tente novamente.');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
-      <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl p-10 border border-slate-100">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-extrabold text-slate-900">Metas<span className="text-blue-600">Pro</span></h1>
-          <p className="text-slate-500">{isRegistering ? 'Crie sua conta' : 'Acesse o sistema'}</p>
-        </div>
+    <>
+      <style>{globalCSS}</style>
 
-        <form onSubmit={handleAuth} className="space-y-4">
-          {isRegistering && (
-            <input type="text" placeholder="Nome" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-blue-500" required onChange={e => setFormData({...formData, name: e.target.value})} />
-          )}
-          <input type="email" placeholder="E-mail" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-blue-500" required onChange={e => setFormData({...formData, email: e.target.value})} />
-          <input type="password" placeholder="Senha" className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-blue-500" required onChange={e => setFormData({...formData, password: e.target.value})} />
-          <button className="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-lg hover:bg-blue-700 transition-all">
-            {isRegistering ? 'Criar Conta' : 'Entrar'}
-          </button>
-        </form>
+      <div style={{
+        minHeight: '100vh', background: T.bg,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '24px 16px',
+        fontFamily: T.fontBody,
+      }}>
+        <div style={{ width: '100%', maxWidth: 420 }}>
 
-        <div className="mt-6 text-center">
-          <button onClick={() => setIsRegistering(!isRegistering)} className="text-sm text-blue-600 font-semibold">
-            {isRegistering ? 'Já tem conta? Login' : 'Não tem conta? Registre-se'}
-          </button>
-        </div>
-
-        <div className="relative my-6">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t"></div></div>
-          <div className="relative flex justify-center text-xs"><span className="bg-white px-2 text-slate-400">OU</span></div>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <div className="flex justify-center">
-            <GoogleLogin onSuccess={onSuccessGoogle} onError={() => alert('Erro Google')} theme="outline" shape="pill" />
+          {/* Logomarca */}
+          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+            <img
+              src="/Logo_MetasPro.jpg"
+              alt="MetasPro"
+              style={{ height: 80, width: 'auto', borderRadius: 12, marginBottom: 12 }}
+              onError={e => e.target.style.display = 'none'}
+            />
+            <h1 style={{
+              fontFamily: T.fontDisplay, fontWeight: 900, fontSize: 32,
+              color: T.navy, letterSpacing: '-0.02em', margin: 0, lineHeight: 1,
+            }}>
+              Metas<span style={{ color: T.green }}>Pro</span>
+            </h1>
+            <p style={{ margin: '6px 0 0', fontSize: 13, color: T.textDim }}>
+              Criando Metas · Gerenciando Resultados
+            </p>
           </div>
-          <button onClick={() => navigate('/sandbox')} className="w-full py-4 bg-slate-100 font-bold rounded-2xl hover:bg-slate-200 transition-all">
-            🧪 Testar Sandbox (Sem Login)
-          </button>
+
+          {/* Card principal */}
+          <div style={{
+            background: T.surface,
+            borderRadius: T.radiusXl,
+            border: `1px solid ${T.border}`,
+            boxShadow: T.shadowMd,
+            padding: '32px 32px',
+            animation: 'fadeIn 0.4s ease',
+          }}>
+
+            {/* Tabs registro/login */}
+            <div style={{
+              display: 'flex', gap: 4, marginBottom: 24,
+              background: T.bgAlt, borderRadius: T.radius,
+              padding: 4,
+            }}>
+              {[
+                { label: 'Entrar',    value: false },
+                { label: 'Registrar',value: true  },
+              ].map(tab => (
+                <button
+                  key={tab.label}
+                  onClick={() => { setIsRegistering(tab.value); setError(''); }}
+                  style={{
+                    flex: 1, padding: '9px 0',
+                    background: isRegistering === tab.value ? T.navy : 'transparent',
+                    color: isRegistering === tab.value ? '#fff' : T.textMd,
+                    border: 'none', borderRadius: T.radiusSm,
+                    fontSize: 14, fontWeight: 600,
+                    fontFamily: T.fontDisplay, cursor: 'pointer',
+                    transition: T.transition,
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Formulário */}
+            <form onSubmit={handleAuth}>
+              {isRegistering && (
+                <div style={{ marginBottom: 14 }}>
+                  <label style={labelStyle}>Nome completo</label>
+                  <input
+                    type="text"
+                    placeholder="Seu nome"
+                    value={formData.name}
+                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                    required
+                    style={inputStyle}
+                    onFocus={e => e.target.style.borderColor = T.borderFocus}
+                    onBlur={e => e.target.style.borderColor = T.border}
+                  />
+                </div>
+              )}
+
+              <div style={{ marginBottom: 14 }}>
+                <label style={labelStyle}>E-mail</label>
+                <input
+                  type="email"
+                  placeholder="seu@email.com"
+                  value={formData.email}
+                  onChange={e => setFormData({ ...formData, email: e.target.value })}
+                  required
+                  style={inputStyle}
+                  onFocus={e => e.target.style.borderColor = T.borderFocus}
+                  onBlur={e => e.target.style.borderColor = T.border}
+                />
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <label style={labelStyle}>Senha</label>
+                <input
+                  type="password"
+                  placeholder="Mínimo 6 caracteres"
+                  value={formData.password}
+                  onChange={e => setFormData({ ...formData, password: e.target.value })}
+                  required
+                  style={inputStyle}
+                  onFocus={e => e.target.style.borderColor = T.borderFocus}
+                  onBlur={e => e.target.style.borderColor = T.border}
+                />
+              </div>
+
+              {error && (
+                <div style={{
+                  background: T.redDim, border: `1px solid ${T.redLight}33`,
+                  borderRadius: T.radiusSm, padding: '10px 14px',
+                  color: T.red, fontSize: 13, marginBottom: 16,
+                }}>
+                  ⚠️ {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  width: '100%', padding: '13px',
+                  background: loading ? T.navyDim : `linear-gradient(135deg, ${T.navy}, ${T.navyLight})`,
+                  border: 'none', borderRadius: T.radius,
+                  color: loading ? T.textDim : '#fff',
+                  fontSize: 15, fontWeight: 700,
+                  fontFamily: T.fontDisplay,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  transition: T.transition,
+                  boxShadow: loading ? 'none' : '0 4px 16px rgba(15,45,82,0.25)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                }}
+              >
+                {loading && (
+                  <span style={{
+                    width: 16, height: 16,
+                    border: '2px solid rgba(255,255,255,0.3)',
+                    borderTopColor: '#fff',
+                    borderRadius: '50%',
+                    animation: 'spin 0.8s linear infinite',
+                    display: 'inline-block',
+                  }} />
+                )}
+                {loading ? 'Aguarde...' : isRegistering ? 'Criar Conta' : 'Entrar'}
+              </button>
+            </form>
+
+            {/* Divisor */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              margin: '20px 0',
+            }}>
+              <div style={{ flex: 1, height: 1, background: T.border }} />
+              <span style={{ fontSize: 12, color: T.textDim }}>ou</span>
+              <div style={{ flex: 1, height: 1, background: T.border }} />
+            </div>
+
+            {/* Google Login */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+              <GoogleLogin
+                onSuccess={onSuccessGoogle}
+                onError={() => setError('Erro ao autenticar com Google.')}
+                theme="outline"
+                shape="rectangular"
+                size="large"
+                text={isRegistering ? 'signup_with' : 'signin_with'}
+              />
+            </div>
+
+            {/* Botão Sandbox */}
+            <button
+              onClick={() => navigate('/sandbox')}
+              style={{
+                width: '100%', padding: '11px',
+                background: T.bgAlt,
+                border: `1.5px solid ${T.border}`,
+                borderRadius: T.radius,
+                color: T.textMd, fontSize: 13, fontWeight: 600,
+                fontFamily: T.fontBody, cursor: 'pointer',
+                transition: T.transition,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = T.navy; e.currentTarget.style.color = T.navy; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.textMd; }}
+            >
+              🧪 Testar Sandbox (sem login)
+            </button>
+          </div>
+
+          {/* Rodapé */}
+          <p style={{ textAlign: 'center', fontSize: 11, color: T.textDim, marginTop: 20 }}>
+            MetasPro © {new Date().getFullYear()} · Todos os direitos reservados
+          </p>
         </div>
       </div>
-    </div>
+    </>
   );
 }
+
+// ─── Estilos locais ────────────────────────────────────────────────────────────
+const labelStyle = {
+  display: 'block', fontSize: 12, fontWeight: 600,
+  color: '#475569', marginBottom: 5,
+  fontFamily: "'DM Sans', sans-serif",
+};
+
+const inputStyle = {
+  width: '100%', padding: '10px 14px',
+  background: '#f8fafc',
+  border: '1.5px solid #e2e8f0',
+  borderRadius: '8px',
+  color: '#0f2d52', fontSize: 14,
+  outline: 'none', transition: 'border-color 0.2s',
+  fontFamily: "'DM Sans', sans-serif",
+};
