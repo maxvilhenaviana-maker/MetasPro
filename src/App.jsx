@@ -1,7 +1,7 @@
 // src/App.jsx
 // Roteamento principal — MetasPro
 // Fluxo: Login → /inicial → menus (dashboard, nova-meta, etc.)
-// ATUALIZADO: inclui tela Inicial como hub central pós-login
+// ATUALIZADO: módulo Usuários implementado com CRUD completo
 
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
@@ -11,6 +11,7 @@ import Onboarding  from './pages/Onboarding';
 import GoalWizard  from './pages/GoalWizard';
 import Dashboard   from './pages/Dashboard';
 import Inicial     from './pages/Inicial';
+import Usuarios    from './pages/Usuarios';   // ← NOVO
 import api from './services/api';
 
 // ─── Extrai token (suporta { token } e { accessToken }) ───────────────────────
@@ -111,9 +112,12 @@ export default function App() {
           <PrivateRouteWithOnboarding><GoalWizard /></PrivateRouteWithOnboarding>
         } />
 
+        {/* ── MÓDULO USUÁRIOS — CRUD completo ────────────────────────────── */}
+        <Route path="/usuarios" element={
+          <PrivateRouteWithOnboarding><Usuarios /></PrivateRouteWithOnboarding>
+        } />
+
         {/* ── Rotas de módulos (estrutura preparada para implementação) ──── */}
-        {/* Usuários */}
-        <Route path="/usuarios"       element={<PrivateRouteWithOnboarding><PlaceholderModulo titulo="Usuários" icone="👤" /></PrivateRouteWithOnboarding>} />
         {/* Empresas */}
         <Route path="/empresas"       element={<PrivateRouteWithOnboarding><PlaceholderModulo titulo="Empresas" icone="🏢" /></PrivateRouteWithOnboarding>} />
         {/* Unidades de Monitoramento */}
@@ -154,14 +158,10 @@ export default function App() {
 
 // ─── Placeholder genérico para módulos em desenvolvimento ────────────────────
 function PlaceholderModulo({ titulo, icone, publico }) {
-  const navigate = typeof window !== 'undefined'
-    ? require('react-router-dom').useNavigate
-    : () => {};
+  const { useNavigate, useSearchParams } = require('react-router-dom');
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
-  const nav = require('react-router-dom').useNavigate();
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const { useSearchParams } = require('react-router-dom');
+  const nav = useNavigate();
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const [params] = useSearchParams();
   const acao = params.get('acao');
