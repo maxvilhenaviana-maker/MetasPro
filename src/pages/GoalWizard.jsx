@@ -1,35 +1,15 @@
 // src/pages/GoalWizard.jsx
 // Wizard de Configuração de Meta — 6 etapas
-// Novidades: modo edição (Recalcular) + compartilhamento via WhatsApp
+// Design: LIGHT — fundo branco, azul marinho + verde MetasPro
+// ATUALIZADO: identidade visual padronizada. Lógica de cálculo preservada.
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
+import { T, globalCSS } from '../theme';
+import NavbarMetasPro from '../components/NavbarMetasPro';
 
-// ─── Paleta ───────────────────────────────────────────────────────────────────
-const C = {
-  bg:        '#060910',
-  surface:   '#0d1117',
-  card:      '#111827',
-  border:    '#1f2937',
-  borderHi:  '#374151',
-  blue:      '#2563eb',
-  blueLight: '#3b82f6',
-  blueDim:   'rgba(37,99,235,0.12)',
-  green:     '#16a34a',
-  greenLight:'#22c55e',
-  greenDim:  'rgba(22,197,94,0.10)',
-  amber:     '#d97706',
-  amberDim:  'rgba(217,119,6,0.12)',
-  red:       '#dc2626',
-  redDim:    'rgba(220,38,38,0.10)',
-  whatsapp:  '#25d366',
-  whatsappDim:'rgba(37,211,102,0.12)',
-  text:      '#f9fafb',
-  textMd:    '#9ca3af',
-  textDim:   '#4b5563',
-};
-
+// ─── Constantes ───────────────────────────────────────────────────────────────
 const STEPS = [
   { id: 1, label: 'Identificação', short: 'ID'   },
   { id: 2, label: 'Direção',       short: 'DIR'  },
@@ -40,732 +20,205 @@ const STEPS = [
 ];
 
 const PERIODICIDADES = [
-  { value: 'SEMANAL',      label: 'Semanal',      desc: 'A cada 7 dias'        },
-  { value: 'QUINZENAL',    label: 'Quinzenal',    desc: 'A cada 15 dias'       },
-  { value: 'MENSAL',       label: 'Mensal',       desc: 'Uma vez por mês'      },
-  { value: 'BIMESTRAL',    label: 'Bimestral',    desc: 'A cada 2 meses'       },
-  { value: 'TRIMESTRAL',   label: 'Trimestral',   desc: 'A cada 3 meses'       },
-  { value: 'SEMESTRAL',    label: 'Semestral',    desc: 'A cada 6 meses'       },
-  { value: 'ANUAL',        label: 'Anual',        desc: 'Uma vez por ano'      },
-  { value: 'PERSONALIZADA',label: 'Personalizada',desc: 'Defina o intervalo'   },
+  { value: 'SEMANAL',       label: 'Semanal',       desc: 'A cada 7 dias'        },
+  { value: 'QUINZENAL',     label: 'Quinzenal',     desc: 'A cada 15 dias'       },
+  { value: 'MENSAL',        label: 'Mensal',        desc: 'Uma vez por mês'      },
+  { value: 'BIMESTRAL',     label: 'Bimestral',     desc: 'A cada 2 meses'       },
+  { value: 'TRIMESTRAL',    label: 'Trimestral',    desc: 'A cada 3 meses'       },
+  { value: 'SEMESTRAL',     label: 'Semestral',     desc: 'A cada 6 meses'       },
+  { value: 'ANUAL',         label: 'Anual',         desc: 'Uma vez por ano'      },
+  { value: 'PERSONALIZADA', label: 'Personalizada', desc: 'Defina o intervalo'   },
 ];
 
 const PRESSOES = [
-  { value: 'MODERADO',      pct: 0.25, label: 'Moderado',      tag: '25%',  desc: 'Meta atingível em 6 a 9 dos 12 períodos históricos.',        color: C.green,      dim: C.greenDim, icon: '▬▬░░' },
-  { value: 'INTERMEDIARIO', pct: 0.50, label: 'Intermediário', tag: '50%',  desc: 'Meta atingível em 3 a 6 dos 12 períodos históricos.',        color: C.blueLight,  dim: C.blueDim,  icon: '▬▬▬░' },
-  { value: 'DESAFIADOR',    pct: 0.75, label: 'Desafiador',    tag: '75%',  desc: 'Meta atingível em 1 a 3 dos 12 períodos históricos.',        color: C.amber,      dim: C.amberDim, icon: '▬▬▬▬' },
-  { value: 'ALAVANCADO',    pct: 1.00, label: 'Alavancado',    tag: '100%', desc: 'Meta atingível apenas no ápice do histórico registrado.',    color: C.red,        dim: C.redDim,   icon: '████' },
+  { value: 'MODERADO',      pct: 0.25, label: 'Moderado',      tag: '25%', color: T.green,  dim: T.greenDim  },
+  { value: 'INTERMEDIARIO', pct: 0.50, label: 'Intermediário', tag: '50%', color: T.blue,   dim: T.blueDim   },
+  { value: 'DESAFIADOR',    pct: 0.75, label: 'Desafiador',    tag: '75%', color: T.amber,  dim: T.amberDim  },
+  { value: 'ALAVANCADO',    pct: 1.00, label: 'Alavancado',    tag: '100%',color: T.red,    dim: T.redDim    },
 ];
 
-// ─── Utilitários ──────────────────────────────────────────────────────────────
-function getToken() {
-  try {
-    const raw = localStorage.getItem('auth_tokens');
-    if (!raw) return null;
-    const p = JSON.parse(raw);
-    return p.accessToken || p.token || null;
-  } catch { return null; }
-}
-
-function fmt(n) {
-  if (n === null || n === undefined) return '—';
-  return Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
-}
-
-function calcPreview(data, direcao, pressaoPct) {
-  const nums = data.filter(v => v !== '' && !isNaN(Number(v))).map(Number);
-  if (nums.length < 3) return null;
-  const mean = nums.reduce((a, b) => a + b, 0) / nums.length;
-  let intervalM, meta;
-  if (direcao === 'AUMENTAR') { intervalM = Math.max(...nums) - mean; meta = mean + pressaoPct * intervalM; }
-  else                        { intervalM = mean - Math.min(...nums); meta = mean - pressaoPct * intervalM; }
-  return { mean, intervalM, meta, count: nums.length };
-}
-
-// ─── WhatsApp share ───────────────────────────────────────────────────────────
-function buildWhatsAppText(result, nomeMeta) {
-  const pressao = PRESSOES.find(p => p.value === result.nivelPressao);
-  const direcaoEmoji = result.direcao === 'AUMENTAR' ? '📈' : '📉';
-
-  let msg = `*MetasPro — Resultado de Meta* 🎯\n\n`;
-  msg += `*Meta:* ${nomeMeta || 'Meta calculada'}\n`;
-  msg += `*Direção:* ${direcaoEmoji} ${result.direcao === 'AUMENTAR' ? 'Aumentar' : 'Reduzir'}\n`;
-  msg += `*Nível de Pressão:* ${pressao?.label} (${pressao?.tag})\n\n`;
-  msg += `━━━━━━━━━━━━━━━━\n`;
-  msg += `📊 *Média Histórica Limpa:* ${fmt(result.mediaCalculada)}\n`;
-  msg += `📐 *Intervalo M:* ${fmt(result.intervaloM)}\n`;
-  msg += `🏆 *META SUGERIDA: ${fmt(result.metaFinal)}*\n`;
-  msg += `━━━━━━━━━━━━━━━━\n\n`;
-
-  if (result.outliersExcluidos?.length > 0) {
-    msg += `🔍 *Outliers removidos pela IA:* ${result.outliersExcluidos.join(', ')}\n`;
-    msg += `_${result.justificativaOutliers}_\n\n`;
-  }
-
-  if (result.justificativaMeta) {
-    msg += `💡 *Análise da IA:*\n${result.justificativaMeta}\n\n`;
-  }
-
-  msg += `_Gerado pelo MetasPro • Criando Metas • Gerenciando Resultados_`;
-  return msg;
-}
-
-function shareWhatsApp(result, nomeMeta) {
-  const text = buildWhatsAppText(result, nomeMeta);
-  const url  = `https://wa.me/?text=${encodeURIComponent(text)}`;
-  window.open(url, '_blank');
-}
-
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
-function Sidebar({ current, isEdit }) {
-  return (
-    <div style={{ width: 200, flexShrink: 0, borderRight: `1px solid ${C.border}`, padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-        {isEdit ? 'Recalcular Meta' : 'Nova Meta'}
-      </p>
-      {isEdit && (
-        <div style={{ marginBottom: 16, padding: '6px 10px', background: C.amberDim, border: `1px solid ${C.amber}44`, borderRadius: 8 }}>
-          <p style={{ margin: 0, fontSize: 11, color: C.amber, fontWeight: 600 }}>✏️ Modo edição</p>
-        </div>
-      )}
-      {STEPS.map((s, i) => {
-        const done   = current > s.id;
-        const active = current === s.id;
-        return (
-          <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', position: 'relative' }}>
-            {i < STEPS.length - 1 && (
-              <div style={{ position: 'absolute', left: 15, top: 36, width: 2, height: 20, background: done ? C.green : C.border, transition: 'background 0.4s' }} />
-            )}
-            <div style={{
-              width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 11, fontWeight: 800,
-              background: done ? C.green : active ? C.blue : 'transparent',
-              border: `2px solid ${done ? C.green : active ? C.blue : C.border}`,
-              color: done || active ? '#fff' : C.textDim,
-              transition: 'all 0.3s', fontFamily: "'Fira Code', monospace",
-            }}>
-              {done ? '✓' : s.id}
-            </div>
-            <p style={{ margin: 0, fontSize: 12, fontWeight: active ? 700 : 500, color: done ? C.greenLight : active ? C.text : C.textDim, transition: 'color 0.3s' }}>
-              {s.label}
-            </p>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── STEP 1: Identificação ────────────────────────────────────────────────────
-function Step1({ data, onChange, unidades, loadingUnidades }) {
-  return (
-    <StepWrapper title="Identificação da Meta" subtitle="Nomeie e contextualize o indicador que será monitorado" icon="◎">
-      <Field label="Nome da Meta *">
-        <Input value={data.nome_meta} onChange={e => onChange('nome_meta', e.target.value)} placeholder="Descreva o indicador de forma clara e objetiva" />
-      </Field>
-      <Field label="Unidade Monitorada *">
-        <Select value={data.unidade_id} onChange={e => onChange('unidade_id', e.target.value)} disabled={loadingUnidades}>
-          <option value="">{loadingUnidades ? 'Carregando unidades...' : '— Selecione uma unidade —'}</option>
-          {unidades.map(u => (
-            <option key={u.id} value={u.id}>{u.nome_unidade}{u.codigo_unidade ? ` (${u.codigo_unidade})` : ''}</option>
-          ))}
-        </Select>
-      </Field>
-      <Field label="Descrição do Objetivo" hint="Contexto estratégico ou operacional (opcional)">
-        <Textarea value={data.objetivo_descritivo} onChange={e => onChange('objetivo_descritivo', e.target.value)} placeholder="Ex: Aumentar a participação de mercado no segmento premium..." rows={3} />
-      </Field>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <Field label="Abrangência">
-          <Select value={data.abrangencia} onChange={e => onChange('abrangencia', e.target.value)}>
-            <option value="ESTRATEGICA">Estratégica</option>
-            <option value="OPERACIONAL">Operacional</option>
-          </Select>
-        </Field>
-        <Field label="Apresentação">
-          <Select value={data.apresentacao} onChange={e => onChange('apresentacao', e.target.value)}>
-            <option value="NUMERO">Número absoluto</option>
-            <option value="PERCENTUAL">Percentual (%)</option>
-          </Select>
-        </Field>
-      </div>
-    </StepWrapper>
-  );
-}
-
-// ─── STEP 2: Direção ──────────────────────────────────────────────────────────
-function Step2({ data, onChange }) {
-  const opts = [
-    { value: 'AUMENTAR', emoji: '📈', title: 'Aumentar', desc: 'O resultado deve crescer ao longo do tempo.', examples: 'Vendas, Receita, Produção, NPS, Clientes', color: C.green,     dim: C.greenDim  },
-    { value: 'REDUZIR',  emoji: '📉', title: 'Reduzir',  desc: 'O resultado deve diminuir ao longo do tempo.', examples: 'Custos, Rejeições, Tempo de espera, Devoluções', color: C.blueLight, dim: C.blueDim   },
-  ];
-  return (
-    <StepWrapper title="Direção da Meta" subtitle="Defina se o objetivo é crescer ou reduzir o indicador" icon="⇅">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 8 }}>
-        {opts.map(opt => {
-          const active = data.direcao === opt.value;
-          return (
-            <button key={opt.value} onClick={() => onChange('direcao', opt.value)} style={{ background: active ? opt.dim : 'transparent', border: `2px solid ${active ? opt.color : C.border}`, borderRadius: 14, padding: '20px 24px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.25s', display: 'flex', alignItems: 'flex-start', gap: 18 }}>
-              <span style={{ fontSize: 32, lineHeight: 1 }}>{opt.emoji}</span>
-              <div style={{ flex: 1 }}>
-                <p style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 800, color: active ? opt.color : C.text, fontFamily: "'Sora', sans-serif" }}>{opt.title}</p>
-                <p style={{ margin: '0 0 8px', fontSize: 13, color: C.textMd }}>{opt.desc}</p>
-                <p style={{ margin: 0, fontSize: 11, color: active ? opt.color : C.textDim }}>Exemplos: {opt.examples}</p>
-              </div>
-              <div style={{ width: 22, height: 22, borderRadius: '50%', border: `2px solid ${active ? opt.color : C.border}`, background: active ? opt.color : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {active && <span style={{ color: '#fff', fontSize: 12 }}>✓</span>}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-      {data.direcao && (
-        <InfoBox color={data.direcao === 'AUMENTAR' ? C.green : C.blueLight}>
-          A IA usará o <strong>{data.direcao === 'AUMENTAR' ? 'maior' : 'menor'}</strong> valor da amostra limpa para calcular o Intervalo M.
-        </InfoBox>
-      )}
-    </StepWrapper>
-  );
-}
-
-// ─── STEP 3: Periodicidade ────────────────────────────────────────────────────
-function Step3({ data, onChange }) {
-  return (
-    <StepWrapper title="Periodicidade" subtitle="Com que frequência os resultados serão registrados?" icon="⟳">
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
-        {PERIODICIDADES.map(p => {
-          const active = data.periodicidade_resultado === p.value;
-          return (
-            <button key={p.value} onClick={() => onChange('periodicidade_resultado', p.value)} style={{ background: active ? C.blueDim : 'transparent', border: `1.5px solid ${active ? C.blue : C.border}`, borderRadius: 12, padding: '14px 16px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s' }}>
-              <p style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 700, color: active ? C.blueLight : C.text, fontFamily: "'Sora', sans-serif" }}>{p.label}</p>
-              <p style={{ margin: 0, fontSize: 11, color: C.textDim }}>{p.desc}</p>
-            </button>
-          );
-        })}
-      </div>
-      {data.periodicidade_resultado === 'PERSONALIZADA' && (
-        <div style={{ marginTop: 16 }}>
-          <Field label="Descreva a periodicidade">
-            <Input value={data.periodicidade_custom || ''} onChange={e => onChange('periodicidade_custom', e.target.value)} placeholder="Ex: A cada 45 dias, por safra, por campanha..." />
-          </Field>
-        </div>
-      )}
-      {data.periodicidade_resultado && (
-        <InfoBox color={C.blueLight}>
-          Resultados registrados <strong>{PERIODICIDADES.find(p => p.value === data.periodicidade_resultado)?.label?.toLowerCase()}</strong>.
-        </InfoBox>
-      )}
-    </StepWrapper>
-  );
-}
-
-// ─── STEP 4: Pressão ──────────────────────────────────────────────────────────
-function Step4({ data, onChange }) {
-  const selected = PRESSOES.find(p => p.value === data.nivel_pressao);
-  return (
-    <StepWrapper title="Nível de Pressão" subtitle="Define o grau de desafio da meta em relação ao histórico" icon="⚡">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
-        {PRESSOES.map(p => {
-          const active = data.nivel_pressao === p.value;
-          return (
-            <button key={p.value} onClick={() => onChange('nivel_pressao', p.value)} style={{ background: active ? p.dim : 'transparent', border: `1.5px solid ${active ? p.color : C.border}`, borderRadius: 12, padding: '16px 20px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.22s', display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ fontFamily: "'Fira Code', monospace", fontSize: 13, letterSpacing: 2, color: active ? p.color : C.textDim, flexShrink: 0, width: 52 }}>{p.icon}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 3 }}>
-                  <span style={{ fontSize: 14, fontWeight: 800, color: active ? p.color : C.text, fontFamily: "'Sora', sans-serif" }}>{p.label}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, background: active ? p.color : C.border, color: active ? '#fff' : C.textDim, padding: '2px 8px', borderRadius: 20, fontFamily: "'Fira Code', monospace" }}>{p.tag}</span>
-                </div>
-                <p style={{ margin: 0, fontSize: 12, color: C.textMd }}>{p.desc}</p>
-              </div>
-              <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${active ? p.color : C.border}`, background: active ? p.color : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {active && <span style={{ color: '#fff', fontSize: 10 }}>✓</span>}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-      {selected && (
-        <div style={{ marginTop: 16, padding: '14px 18px', background: `linear-gradient(135deg, ${selected.dim}, transparent)`, border: `1px solid ${selected.color}22`, borderRadius: 12 }}>
-          <p style={{ margin: 0, fontSize: 12, color: selected.color, fontWeight: 600 }}>
-            Fórmula: Meta = Média {data.direcao === 'REDUZIR' ? '−' : '+'} {selected.tag} × Intervalo M
-          </p>
-        </div>
-      )}
-    </StepWrapper>
-  );
-}
-
-// ─── STEP 5: Histórico ────────────────────────────────────────────────────────
-function Step5({ data, onChange }) {
-  const vals       = data.historico;
-  const periodLabel = PERIODICIDADES.find(p => p.value === data.periodicidade_resultado)?.label || 'Período';
-  const pressao     = PRESSOES.find(p => p.value === data.nivel_pressao);
-  const filled      = vals.filter(v => v !== '' && !isNaN(Number(v)));
-  const preview     = calcPreview(vals, data.direcao, pressao?.pct || 0.25);
-
-  const handleChange = (i, val) => {
-    const next = [...vals]; next[i] = val; onChange('historico', next);
-  };
-
-  return (
-    <StepWrapper title="Resultados Históricos" subtitle={`Insira os últimos resultados. Mínimo 6, ideal 12 períodos.`} icon="∿">
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginTop: 8 }}>
-        {vals.map((v, i) => {
-          const hasVal = v !== '' && !isNaN(Number(v));
-          return (
-            <div key={i}>
-              <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: hasVal ? C.blueLight : C.textDim, marginBottom: 4, letterSpacing: '0.06em', fontFamily: "'Fira Code', monospace" }}>
-                {periodLabel.slice(0, 3).toUpperCase()} {i + 1}
-              </label>
-              <input
-                type="number" value={v}
-                onChange={e => handleChange(i, e.target.value)}
-                placeholder="—"
-                style={{ width: '100%', padding: '10px', boxSizing: 'border-box', background: hasVal ? 'rgba(37,99,235,0.08)' : C.surface, border: `1.5px solid ${hasVal ? C.blue : C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: 'none', transition: 'all 0.2s', fontFamily: "'Fira Code', monospace", textAlign: 'center' }}
-                onFocus={e => e.target.style.borderColor = C.blueLight}
-                onBlur={e => e.target.style.borderColor = hasVal ? C.blue : C.border}
-              />
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Barra de progresso */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
-        <div style={{ flex: 1, height: 4, background: C.border, borderRadius: 4, overflow: 'hidden' }}>
-          <div style={{ height: '100%', borderRadius: 4, transition: 'width 0.4s', width: `${(filled.length / 12) * 100}%`, background: filled.length >= 6 ? C.green : C.amber }} />
-        </div>
-        <span style={{ fontSize: 12, fontWeight: 700, color: filled.length >= 6 ? C.greenLight : C.amber, fontFamily: "'Fira Code', monospace", flexShrink: 0 }}>
-          {filled.length}/12
-        </span>
-      </div>
-
-      {/* Preview */}
-      {preview && (
-        <div style={{ marginTop: 16, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
-          <div style={{ padding: '10px 16px', background: 'rgba(37,99,235,0.08)', borderBottom: `1px solid ${C.border}` }}>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: C.blueLight, letterSpacing: '0.08em' }}>⚡ PRÉ-VISUALIZAÇÃO (sem IA — dados brutos)</p>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
-            <PreviewCell label="Média" value={fmt(preview.mean)} />
-            <PreviewCell label="Intervalo M" value={fmt(preview.intervalM)} border />
-            <PreviewCell label="Meta estimada" value={fmt(preview.meta)} highlight color={pressao?.color} />
-          </div>
-          <p style={{ margin: 0, padding: '8px 16px 10px', fontSize: 11, color: C.textDim }}>* A IA refinará este cálculo removendo outliers.</p>
-        </div>
-      )}
-      {filled.length < 6 && filled.length > 0 && (
-        <InfoBox color={C.amber}>Preencha pelo menos <strong>6 períodos</strong> para uma análise confiável.</InfoBox>
-      )}
-    </StepWrapper>
-  );
-}
-
-// ─── STEP 6: Revisão ──────────────────────────────────────────────────────────
-function Step6({ data, unidades, onSubmit, loading, error, isEdit }) {
-  const pressao = PRESSOES.find(p => p.value === data.nivel_pressao);
-  const per     = PERIODICIDADES.find(p => p.value === data.periodicidade_resultado);
-  const unidade = unidades.find(u => u.id === data.unidade_id);
-  const filled  = data.historico.filter(v => v !== '' && !isNaN(Number(v)));
-
-  const rows = [
-    { label: 'Nome da Meta',       value: data.nome_meta },
-    { label: 'Unidade',            value: unidade?.nome_unidade || '—' },
-    { label: 'Direção',            value: data.direcao === 'AUMENTAR' ? '📈 Aumentar' : '📉 Reduzir' },
-    { label: 'Periodicidade',      value: per?.label || '—' },
-    { label: 'Nível de Pressão',   value: `${pressao?.label} (${pressao?.tag})` },
-    { label: 'Apresentação',       value: data.apresentacao === 'NUMERO' ? 'Número absoluto' : 'Percentual (%)' },
-    { label: 'Abrangência',        value: data.abrangencia === 'ESTRATEGICA' ? 'Estratégica' : 'Operacional' },
-    { label: 'Períodos históricos',value: `${filled.length} de 12 preenchidos` },
-  ];
-
-  return (
-    <StepWrapper title="Revisão Final" subtitle="Confirme as configurações antes de enviar para análise" icon="◈">
-      {isEdit && (
-        <div style={{ padding: '10px 14px', background: C.amberDim, border: `1px solid ${C.amber}44`, borderRadius: 10, marginBottom: 4 }}>
-          <p style={{ margin: 0, fontSize: 12, color: C.amber, fontWeight: 600 }}>
-            ✏️ Você está <strong>recalculando</strong> esta meta. Um novo ciclo será criado com os dados atualizados.
-          </p>
-        </div>
-      )}
-
-      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
-        {rows.map((r, i) => (
-          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', borderBottom: i < rows.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-            <span style={{ fontSize: 12, color: C.textDim }}>{r.label}</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: C.text, textAlign: 'right', maxWidth: '55%' }}>{r.value}</span>
-          </div>
-        ))}
-      </div>
-
-      {data.objetivo_descritivo && (
-        <div style={{ padding: '12px 16px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10 }}>
-          <p style={{ margin: '0 0 4px', fontSize: 11, color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Objetivo</p>
-          <p style={{ margin: 0, fontSize: 13, color: C.textMd, lineHeight: 1.5 }}>{data.objetivo_descritivo}</p>
-        </div>
-      )}
-
-      <div style={{ padding: '12px 16px', background: 'rgba(22,163,74,0.08)', border: `1px solid rgba(22,163,74,0.2)`, borderRadius: 10 }}>
-        <p style={{ margin: 0, fontSize: 12, color: C.greenLight, lineHeight: 1.5 }}>
-          🤖 A <strong>IA analisará</strong> os dados históricos, identificará outliers e sugerirá a meta final.
-        </p>
-      </div>
-
-      {error && (
-        <div style={{ padding: '10px 14px', background: C.redDim, border: `1px solid ${C.red}44`, borderRadius: 10, color: '#fca5a5', fontSize: 13 }}>
-          ⚠️ {error}
-        </div>
-      )}
-
-      <button onClick={onSubmit} disabled={loading} style={{
-        width: '100%', marginTop: 4, padding: '15px',
-        background: loading ? C.border : `linear-gradient(135deg, ${C.green}, #15803d)`,
-        border: 'none', borderRadius: 12, color: '#fff',
-        fontSize: 15, fontWeight: 800, cursor: loading ? 'not-allowed' : 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-        fontFamily: "'Sora', sans-serif",
-        boxShadow: loading ? 'none' : '0 4px 24px rgba(22,163,74,0.3)',
-        transition: 'all 0.25s',
-      }}>
-        {loading ? <><Spinner /> Analisando com IA...</> : isEdit ? '🔄 Recalcular Meta' : '🚀 Confirmar e Calcular Meta'}
-      </button>
-    </StepWrapper>
-  );
-}
-
-// ─── Tela de Resultado ────────────────────────────────────────────────────────
-function ResultScreen({ result, nomeMeta, onEdit, onNew, onDashboard }) {
-  const pressao = PRESSOES.find(p => p.value === result.nivelPressao);
-  const [copied, setCopied] = useState(false);
-
-  const handleCopyText = () => {
-    const text = buildWhatsAppText(result, nomeMeta);
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    });
-  };
-
-  return (
-    <div style={{ padding: '32px 36px', animation: 'fadeIn 0.5s ease' }}>
-      {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: 28 }}>
-        <div style={{ width: 70, height: 70, borderRadius: '50%', margin: '0 auto 16px', background: 'linear-gradient(135deg, #065f46, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, animation: 'pulseGreen 2s infinite' }}>✓</div>
-        <h2 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 900, color: C.text, fontFamily: "'Sora', sans-serif" }}>
-          Meta Calculada!
-        </h2>
-        <p style={{ margin: 0, fontSize: 13, color: C.textMd }}>
-          {nomeMeta && <span style={{ color: C.blueLight, fontWeight: 600 }}>{nomeMeta} · </span>}
-          A IA analisou o histórico e definiu a meta ideal
-        </p>
-      </div>
-
-      {/* Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
-        <ResultCard label="Média Limpa"  value={fmt(result.mediaCalculada)} />
-        <ResultCard label="Intervalo M"  value={fmt(result.intervaloM)} />
-        <ResultCard label="META FINAL"   value={fmt(result.metaFinal)} highlight color={pressao?.color} />
-      </div>
-
-      {/* Outliers */}
-      {result.outliersExcluidos?.length > 0 && (
-        <div style={{ padding: '14px 18px', marginBottom: 14, background: C.amberDim, border: `1px solid ${C.amber}33`, borderRadius: 12 }}>
-          <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: C.amber }}>🔍 Outliers removidos pela IA</p>
-          <p style={{ margin: '0 0 8px', fontSize: 13, color: '#fde68a', fontFamily: "'Fira Code', monospace" }}>{result.outliersExcluidos.join(' · ')}</p>
-          <p style={{ margin: 0, fontSize: 12, color: '#d97706', lineHeight: 1.5 }}>{result.justificativaOutliers}</p>
-        </div>
-      )}
-
-      {/* Justificativa */}
-      <div style={{ padding: '14px 18px', marginBottom: 20, background: C.blueDim, border: `1px solid ${C.blue}33`, borderRadius: 12 }}>
-        <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: C.blueLight }}>💡 Por que esta meta?</p>
-        <p style={{ margin: 0, fontSize: 13, color: C.textMd, lineHeight: 1.6 }}>{result.justificativaMeta}</p>
-      </div>
-
-      {/* ── Ações principais ──────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-        {/* Recalcular / Editar */}
-        <button onClick={onEdit} style={{
-          flex: 1, padding: '13px 10px',
-          background: C.amberDim, border: `1px solid ${C.amber}55`,
-          borderRadius: 12, color: C.amber, fontSize: 13, fontWeight: 700,
-          cursor: 'pointer', fontFamily: "'Sora', sans-serif",
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          transition: 'all 0.2s',
-        }}>
-          ✏️ Ajustar e Recalcular
-        </button>
-
-        {/* Dashboard */}
-        <button onClick={onDashboard} style={{
-          flex: 1, padding: '13px 10px',
-          background: `linear-gradient(135deg, ${C.blue}, #1e40af)`,
-          border: 'none', borderRadius: 12,
-          color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-          fontFamily: "'Sora', sans-serif",
-          boxShadow: '0 4px 20px rgba(37,99,235,0.3)',
-        }}>
-          Ver no Dashboard →
-        </button>
-      </div>
-
-      {/* ── Compartilhamento WhatsApp ─────────────────────────────────────── */}
-      <div style={{
-        border: `1px solid ${C.whatsapp}33`,
-        borderRadius: 14, overflow: 'hidden', marginBottom: 10,
-      }}>
-        {/* Header da seção */}
-        <div style={{ padding: '10px 16px', background: C.whatsappDim, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 16 }}>📲</span>
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: C.whatsapp }}>
-            Compartilhar resultado
-          </p>
-        </div>
-
-        <div style={{ padding: '14px 16px', display: 'flex', gap: 10 }}>
-          {/* Enviar via WhatsApp */}
-          <button
-            onClick={() => shareWhatsApp(result, nomeMeta)}
-            style={{
-              flex: 2, padding: '12px 14px',
-              background: C.whatsapp,
-              border: 'none', borderRadius: 10,
-              color: '#fff', fontSize: 13, fontWeight: 800,
-              cursor: 'pointer', fontFamily: "'Sora', sans-serif",
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              boxShadow: '0 4px 16px rgba(37,211,102,0.35)',
-              transition: 'opacity 0.2s',
-            }}
-            onMouseOver={e => e.currentTarget.style.opacity = '0.9'}
-            onMouseOut={e => e.currentTarget.style.opacity = '1'}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-            </svg>
-            Enviar pelo WhatsApp
-          </button>
-
-          {/* Copiar texto */}
-          <button
-            onClick={handleCopyText}
-            style={{
-              flex: 1, padding: '12px 10px',
-              background: copied ? C.greenDim : 'transparent',
-              border: `1px solid ${copied ? C.green : C.border}`,
-              borderRadius: 10, color: copied ? C.greenLight : C.textMd,
-              fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              fontFamily: "'DM Sans', sans-serif", transition: 'all 0.25s',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-            }}
-          >
-            {copied ? '✓ Copiado' : '📋 Copiar'}
-          </button>
-        </div>
-
-        {/* Preview do texto */}
-        <div style={{ margin: '0 16px 14px', padding: '10px 12px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, maxHeight: 80, overflow: 'hidden', position: 'relative' }}>
-          <p style={{ margin: 0, fontSize: 10, color: C.textDim, lineHeight: 1.5, whiteSpace: 'pre-line', fontFamily: "'Fira Code', monospace" }}>
-            {buildWhatsAppText(result, nomeMeta).slice(0, 160)}…
-          </p>
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 24, background: `linear-gradient(transparent, ${C.surface})` }} />
-        </div>
-      </div>
-
-      {/* Nova meta */}
-      <button onClick={onNew} style={{
-        width: '100%', padding: '11px',
-        background: 'transparent', border: `1px solid ${C.border}`,
-        borderRadius: 12, color: C.textDim, fontSize: 13, fontWeight: 600,
-        cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-      }}>
-        + Criar nova meta
-      </button>
-    </div>
-  );
-}
-
-// ─── Componentes auxiliares ───────────────────────────────────────────────────
-function StepWrapper({ title, subtitle, icon, children }) {
-  return (
-    <div style={{ padding: '32px 36px', animation: 'fadeIn 0.35s ease' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 28 }}>
-        <div style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0, background: C.blueDim, border: `1px solid ${C.blue}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: C.blueLight, fontFamily: "'Fira Code', monospace" }}>{icon}</div>
-        <div>
-          <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 800, color: C.text, fontFamily: "'Sora', sans-serif" }}>{title}</h2>
-          <p style={{ margin: 0, fontSize: 13, color: C.textMd }}>{subtitle}</p>
-        </div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>{children}</div>
-    </div>
-  );
-}
-
-function Field({ label, hint, children }) {
-  return (
-    <div>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.textDim, marginBottom: 6, letterSpacing: '0.07em', textTransform: 'uppercase' }}>{label}</label>
-      {children}
-      {hint && <p style={{ margin: '5px 0 0', fontSize: 11, color: C.textDim }}>{hint}</p>}
-    </div>
-  );
-}
-
-function Input({ value, onChange, placeholder, maxLength }) {
-  const [focused, setFocused] = useState(false);
-  return (
-    <input value={value} onChange={onChange} placeholder={placeholder} maxLength={maxLength}
-      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-      style={{ width: '100%', padding: '12px 14px', boxSizing: 'border-box', background: focused ? 'rgba(37,99,235,0.06)' : C.surface, border: `1.5px solid ${focused ? C.blue : C.border}`, borderRadius: 10, color: C.text, fontSize: 14, outline: 'none', transition: 'all 0.2s', fontFamily: "'DM Sans', sans-serif" }}
-    />
-  );
-}
-
-function Select({ value, onChange, children, disabled }) {
-  return (
-    <select value={value} onChange={onChange} disabled={disabled}
-      style={{ width: '100%', padding: '12px 14px', boxSizing: 'border-box', background: C.surface, border: `1.5px solid ${C.border}`, borderRadius: 10, color: value ? C.text : C.textDim, fontSize: 14, outline: 'none', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", appearance: 'none' }}>
-      {children}
-    </select>
-  );
-}
-
-function Textarea({ value, onChange, placeholder, rows }) {
-  const [focused, setFocused] = useState(false);
-  return (
-    <textarea value={value} onChange={onChange} placeholder={placeholder} rows={rows}
-      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-      style={{ width: '100%', padding: '12px 14px', boxSizing: 'border-box', background: focused ? 'rgba(37,99,235,0.06)' : C.surface, border: `1.5px solid ${focused ? C.blue : C.border}`, borderRadius: 10, color: C.text, fontSize: 14, outline: 'none', transition: 'all 0.2s', resize: 'vertical', lineHeight: 1.5, fontFamily: "'DM Sans', sans-serif" }}
-    />
-  );
-}
-
-function InfoBox({ color, children }) {
-  return (
-    <div style={{ padding: '10px 14px', marginTop: 4, background: `${color}11`, border: `1px solid ${color}33`, borderRadius: 10, fontSize: 12, color: C.textMd, lineHeight: 1.5 }}>
-      {children}
-    </div>
-  );
-}
-
-function PreviewCell({ label, value, highlight, color, border }) {
-  return (
-    <div style={{ padding: '12px 16px', textAlign: 'center', borderLeft: border ? `1px solid ${C.border}` : 'none', background: highlight ? `${color}14` : 'transparent' }}>
-      <p style={{ margin: '0 0 4px', fontSize: 10, color: C.textDim, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label}</p>
-      <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: highlight ? color : C.text, fontFamily: "'Fira Code', monospace" }}>{value}</p>
-    </div>
-  );
-}
-
-function ResultCard({ label, value, highlight, color }) {
-  return (
-    <div style={{ padding: '14px 16px', borderRadius: 12, textAlign: 'center', background: highlight ? `${color}18` : C.card, border: `1px solid ${highlight ? color + '44' : C.border}` }}>
-      <p style={{ margin: '0 0 4px', fontSize: 10, color: highlight ? color : C.textDim, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label}</p>
-      <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: highlight ? color : C.text, fontFamily: "'Fira Code', monospace" }}>{value}</p>
-    </div>
-  );
-}
-
-function Spinner() {
-  return <div style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />;
-}
-
-// ─── Estado inicial ───────────────────────────────────────────────────────────
 const INITIAL = {
-  nome_meta: '', unidade_id: '', objetivo_descritivo: '',
-  abrangencia: 'OPERACIONAL', apresentacao: 'NUMERO',
-  direcao: 'AUMENTAR', periodicidade_resultado: 'MENSAL',
-  periodicidade_custom: '', nivel_pressao: 'MODERADO',
-  historico: Array(12).fill(''),
+  unidade_id: '', nome_meta: '', objetivo_descritivo: '',
+  direcao: '', periodicidade: '', nivel_pressao: '', historico: '',
 };
+
+// ─── Indicador de Etapas ──────────────────────────────────────────────────────
+function StepBar({ current }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center',
+      background: T.surface, borderBottom: `1px solid ${T.border}`,
+      padding: '12px 20px', overflowX: 'auto', gap: 0,
+    }}>
+      {STEPS.map((s, i) => (
+        <React.Fragment key={s.id}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: '50%',
+              background: current === s.id
+                ? `linear-gradient(135deg, ${T.navy}, ${T.navyLight})`
+                : current > s.id ? T.green : T.bgAlt,
+              color: current >= s.id ? '#fff' : T.textDim,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 700, fontFamily: T.fontDisplay,
+              border: `2px solid ${current >= s.id ? 'transparent' : T.border}`,
+              transition: T.transition, flexShrink: 0,
+            }}>
+              {current > s.id ? '✓' : s.id}
+            </div>
+            <span style={{
+              fontSize: 12, fontWeight: current === s.id ? 700 : 500,
+              color: current === s.id ? T.navy : current > s.id ? T.green : T.textDim,
+              fontFamily: T.fontDisplay,
+              display: window.innerWidth < 500 ? 'none' : 'inline',
+            }}>
+              {s.label}
+            </span>
+          </div>
+          {i < STEPS.length - 1 && (
+            <div style={{
+              flex: 1, height: 2, minWidth: 16, maxWidth: 40, margin: '0 4px',
+              background: current > s.id ? T.green : T.border,
+              transition: T.transition,
+            }} />
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+// ─── Card de opção selecionável ───────────────────────────────────────────────
+function OptionCard({ label, desc, selected, onClick, color, badge }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        width: '100%', textAlign: 'left',
+        padding: '14px 16px',
+        background: selected ? (color ? color + '14' : T.navyDim) : T.bgAlt,
+        border: `2px solid ${selected ? (color || T.navy) : T.border}`,
+        borderRadius: T.radius, cursor: 'pointer',
+        transition: T.transition,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 10,
+      }}
+      onMouseEnter={e => { if (!selected) e.currentTarget.style.borderColor = T.borderHi; }}
+      onMouseLeave={e => { if (!selected) e.currentTarget.style.borderColor = T.border; }}
+    >
+      <div>
+        <div style={{ fontFamily: T.fontDisplay, fontWeight: 600, fontSize: 14, color: selected ? (color || T.navy) : T.text }}>
+          {label}
+        </div>
+        {desc && <div style={{ fontSize: 12, color: T.textDim, fontFamily: T.fontBody, marginTop: 2 }}>{desc}</div>}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        {badge && (
+          <span style={{
+            padding: '2px 8px', borderRadius: 999,
+            background: selected ? (color || T.navy) : T.border,
+            color: selected ? '#fff' : T.textDim,
+            fontSize: 11, fontWeight: 700, fontFamily: T.fontDisplay,
+          }}>
+            {badge}
+          </span>
+        )}
+        <div style={{
+          width: 18, height: 18, borderRadius: '50%',
+          border: `2px solid ${selected ? (color || T.navy) : T.borderHi}`,
+          background: selected ? (color || T.navy) : 'transparent',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {selected && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff' }} />}
+        </div>
+      </div>
+    </button>
+  );
+}
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
 export default function GoalWizard() {
-  const navigate       = useNavigate();
+  const navigate     = useNavigate();
+  const topRef       = useRef(null);
   const [searchParams] = useSearchParams();
+  const editId       = searchParams.get('edit');
 
-  // Modo edição: ?edit=configId pré-preenche o wizard
-  const editId = searchParams.get('edit') || null;
+  const [step, setStep]           = useState(1);
+  const [form, setForm]           = useState(INITIAL);
+  const [unidades, setUnidades]   = useState([]);
+  const [loading, setLoading]     = useState(false);
+  const [loadingEdit, setLoadingEdit] = useState(!!editId);
+  const [error, setError]         = useState('');
+  const [result, setResult]       = useState(null);
+  const [empresa, setEmpresa]     = useState(null);
+  const [isEdit, setIsEdit]       = useState(false);
 
-  const [step, setStep]         = useState(1);
-  const [form, setForm]         = useState(INITIAL);
-  const [isEdit, setIsEdit]     = useState(false);
-  const [unidades, setUnidades] = useState([]);
-  const [loadingUni, setLoadingUni] = useState(true);
-  const [loading, setLoading]   = useState(false);
-  const [loadingEdit, setLoadingEdit] = useState(false);
-  const [error, setError]       = useState('');
-  const [result, setResult]     = useState(null);
-  const topRef = useRef(null);
-
-  // Carrega unidades
-  useEffect(() => {
-    api.get('/onboarding/status')
-      .then(({ data }) => {
-        if (data.onboardingCompleto && data.empresa?.id) {
-          return api.get(`/metas/unidades/${data.empresa.id}`);
-        }
-      })
-      .then(res => { if (res?.data) setUnidades(res.data); })
-      .catch(() => {})
-      .finally(() => setLoadingUni(false));
-  }, []);
-
-  // Modo edição: carrega dados da meta existente
-  useEffect(() => {
-    if (!editId) return;
-    setIsEdit(true);
-    setLoadingEdit(true);
-    api.get(`/metas/config/${editId}`)
-      .then(({ data }) => {
-        setForm({
-          nome_meta:               data.nome_meta               || '',
-          unidade_id:              data.unidade_id              || '',
-          objetivo_descritivo:     data.objetivo_descritivo     || '',
-          abrangencia:             data.abrangencia             || 'OPERACIONAL',
-          apresentacao:            data.apresentacao            || 'NUMERO',
-          direcao:                 data.direcao                 || 'AUMENTAR',
-          periodicidade_resultado: data.periodicidade_resultado || 'MENSAL',
-          periodicidade_custom:    '',
-          nivel_pressao:           data.nivel_pressao_label     || 'MODERADO',
-          historico:               data.historico?.length
-            ? [...data.historico.map(String), ...Array(Math.max(0, 12 - data.historico.length)).fill('')]
-            : Array(12).fill(''),
-        });
-      })
-      .catch(() => {})
-      .finally(() => setLoadingEdit(false));
-  }, [editId]);
-
-  const setField = (key, val) => setForm(f => ({ ...f, [key]: val }));
   const scrollTop = () => topRef.current?.scrollIntoView({ behavior: 'smooth' });
 
+  // Carrega empresa, unidades e meta em edição
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const statusRes = await api.get('/onboarding/status').catch(() => ({ data: {} }));
+        if (statusRes.data?.empresa) {
+          setEmpresa(statusRes.data.empresa);
+          const unidsRes = await api.get(`/metas/unidades/${statusRes.data.empresa.id}`);
+          setUnidades(unidsRes.data || []);
+        }
+        if (editId) {
+          const metaRes = await api.get(`/metas/${editId}`);
+          const m = metaRes.data;
+          setForm({
+            unidade_id:           m.unidade_id        || '',
+            nome_meta:            m.nome_meta         || '',
+            objetivo_descritivo:  m.objetivo_descritivo || '',
+            direcao:              m.direcao           || '',
+            periodicidade:        m.periodicidade     || '',
+            nivel_pressao:        m.nivel_pressao ? String(m.nivel_pressao) : '',
+            historico:            (m.historico || []).join(', '),
+          });
+          setIsEdit(true);
+        }
+      } catch (err) {
+        if (err.response?.status === 401) { localStorage.removeItem('auth_tokens'); navigate('/login'); }
+      } finally {
+        setLoadingEdit(false);
+      }
+    };
+    init();
+  }, [editId, navigate]);
+
+  // Validação por etapa
   const canProceed = () => {
-    if (step === 1) return form.nome_meta.trim() && form.unidade_id;
-    if (step === 2) return !!form.direcao;
-    if (step === 3) return !!form.periodicidade_resultado;
-    if (step === 4) return !!form.nivel_pressao;
-    if (step === 5) return form.historico.filter(v => v !== '' && !isNaN(Number(v))).length >= 6;
+    if (step === 1) return form.unidade_id && form.nome_meta.trim();
+    if (step === 2) return form.direcao;
+    if (step === 3) return form.periodicidade;
+    if (step === 4) return form.nivel_pressao;
+    if (step === 5) {
+      const nums = form.historico.split(/[\s,;]+/).filter(v => v !== '').map(Number);
+      return nums.length >= 3 && nums.every(n => !isNaN(n));
+    }
     return true;
   };
 
-  const next = () => { if (canProceed()) { setStep(s => s + 1); scrollTop(); } };
-  const back = () => { setStep(s => s - 1); scrollTop(); };
+  const next = () => { if (canProceed() && step < 6) { setStep(s => s + 1); scrollTop(); } };
+  const prev = () => { if (step > 1) { setStep(s => s - 1); scrollTop(); } };
 
-  const handleSubmit = async () => {
-    setError(''); setLoading(true);
+  const pressaoMap = { MODERADO: 0.25, INTERMEDIARIO: 0.50, DESAFIADOR: 0.75, ALAVANCADO: 1.00 };
+
+  const handleCalcular = async () => {
+    setLoading(true); setError('');
     try {
-      const nums = form.historico.filter(v => v !== '' && !isNaN(Number(v))).map(Number);
+      const historico = form.historico.split(/[\s,;]+/).filter(v => v !== '').map(Number);
       const { data } = await api.post('/metas/calcular', {
-        nome_meta:               form.nome_meta,
-        unidade_id:              form.unidade_id,
-        objetivo_descritivo:     form.objetivo_descritivo,
-        abrangencia:             form.abrangencia,
-        apresentacao:            form.apresentacao,
-        direcao:                 form.direcao,
-        periodicidade_resultado: form.periodicidade_resultado,
-        nivel_pressao:           form.nivel_pressao,
-        historico:               nums,
-        config_id_origem:        isEdit ? editId : undefined, // backend pode usar para atualizar
+        unidade_id:          form.unidade_id,
+        nome_meta:           form.nome_meta.trim(),
+        objetivo_descritivo: form.objetivo_descritivo.trim(),
+        direcao:             form.direcao,
+        periodicidade:       form.periodicidade,
+        nivel_pressao:       pressaoMap[form.nivel_pressao],
+        historico,
+        editId: editId || undefined,
       });
       setResult(data);
     } catch (err) {
@@ -775,100 +228,434 @@ export default function GoalWizard() {
     }
   };
 
-  // "Ajustar e Recalcular" — volta ao wizard mantendo dados preenchidos
-  const handleEdit = () => {
-    setResult(null);
-    setStep(1);
-    setIsEdit(true);
-    scrollTop();
-  };
-
-  const handleNew = () => { setForm(INITIAL); setStep(1); setResult(null); setError(''); setIsEdit(false); };
+  const handleEdit = () => { setResult(null); setStep(1); setIsEdit(true); scrollTop(); };
+  const handleNew  = () => { setForm(INITIAL); setStep(1); setResult(null); setError(''); setIsEdit(false); };
 
   if (loadingEdit) {
     return (
-      <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.fontBody }}>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ width: 40, height: 40, border: `3px solid ${C.border}`, borderTopColor: C.blueLight, borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
-          <p style={{ color: C.textDim, fontSize: 13, fontFamily: 'sans-serif', margin: 0 }}>Carregando meta...</p>
+          <div style={{ width: 36, height: 36, border: `3px solid ${T.border}`, borderTopColor: T.navy, borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
+          <p style={{ color: T.textDim, fontSize: 13 }}>Carregando meta...</p>
         </div>
       </div>
     );
   }
 
-  return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600&family=Fira+Code:wght@400;500;700&display=swap');
-        @keyframes fadeIn    { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes spin      { to { transform:rotate(360deg); } }
-        @keyframes pulseGreen {
-          0%,100% { box-shadow: 0 0 0 10px rgba(22,163,74,0.12); }
-          50%     { box-shadow: 0 0 0 18px rgba(22,163,74,0.06); }
-        }
-        * { box-sizing: border-box; }
-        input::placeholder, textarea::placeholder { color: ${C.textDim}; }
-        select option { background: ${C.card}; color: ${C.text}; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: ${C.bg}; }
-        ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 4px; }
-      `}</style>
+  // ── Tela de Resultado ──────────────────────────────────────────────────────
+  if (result) {
+    const pressaoLabel = PRESSOES.find(p => p.value === form.nivel_pressao)?.label || form.nivel_pressao;
+    return (
+      <>
+        <style>{globalCSS}</style>
+        <div style={{ minHeight: '100vh', background: T.bg, fontFamily: T.fontBody }}>
+          <NavbarMetasPro empresa={empresa} />
+          <div style={{ maxWidth: 640, margin: '0 auto', padding: '32px 20px' }}>
 
-      <div ref={topRef} style={{ minHeight: '100vh', background: C.bg, fontFamily: "'DM Sans', sans-serif", display: 'flex', flexDirection: 'column' }}>
+            {/* Resultado */}
+            <div style={{
+              background: T.surface, borderRadius: T.radiusXl,
+              border: `2px solid ${T.green}`,
+              boxShadow: `0 8px 32px ${T.greenDim}`,
+              padding: '32px 28px', textAlign: 'center', marginBottom: 20,
+              animation: 'fadeIn 0.4s ease',
+            }}>
+              <div style={{
+                width: 64, height: 64, borderRadius: '50%',
+                background: `linear-gradient(135deg, ${T.green}, ${T.greenDark})`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 28, margin: '0 auto 16px',
+                boxShadow: `0 8px 24px ${T.greenDim}`,
+              }}>
+                🎯
+              </div>
+              <h2 style={{ fontFamily: T.fontDisplay, fontWeight: 900, fontSize: 22, color: T.navy, marginBottom: 4 }}>
+                Meta Calculada!
+              </h2>
+              <p style={{ fontSize: 13, color: T.textDim, marginBottom: 24, fontFamily: T.fontBody }}>
+                {isEdit ? 'Meta recalculada com sucesso' : 'Meta criada com sucesso'}
+              </p>
 
-        {/* Top bar */}
-        <div style={{ height: 52, background: C.surface, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 16, fontWeight: 900, color: C.text, fontFamily: "'Sora', sans-serif", letterSpacing: '-0.02em' }}>
-              Metas<span style={{ color: C.blueLight }}>Pro</span>
-            </span>
-            {isEdit && (
-              <span style={{ fontSize: 11, fontWeight: 700, color: C.amber, background: C.amberDim, border: `1px solid ${C.amber}44`, padding: '2px 8px', borderRadius: 20 }}>
-                MODO EDIÇÃO
-              </span>
+              {/* Meta final em destaque */}
+              <div style={{
+                background: `linear-gradient(135deg, ${T.navy}, ${T.navyLight})`,
+                borderRadius: T.radiusLg, padding: '20px',
+                marginBottom: 20, color: '#fff',
+              }}>
+                <div style={{ fontSize: 12, opacity: 0.7, fontFamily: T.fontBody, marginBottom: 4 }}>META OFICIAL</div>
+                <div style={{ fontFamily: T.fontDisplay, fontWeight: 900, fontSize: 40 }}>
+                  {Number(result.metaFinal).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}
+                </div>
+              </div>
+
+              {/* Detalhes */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+                {[
+                  { label: 'Média Histórica',    value: Number(result.mediaCalculada).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) },
+                  { label: 'Intervalo M',         value: Number(result.intervaloM).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) },
+                  { label: 'Nível de Pressão',    value: pressaoLabel },
+                  { label: 'Direção',             value: result.direcao || form.direcao },
+                ].map(item => (
+                  <div key={item.label} style={{
+                    background: T.bgAlt, borderRadius: T.radiusSm,
+                    padding: '12px', textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: 10, color: T.textDim, fontFamily: T.fontBody, marginBottom: 2 }}>{item.label}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.navy, fontFamily: T.fontDisplay }}>{item.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Justificativas IA */}
+              {result.justificativaMeta && (
+                <div style={{
+                  background: T.blueDim, border: `1px solid ${T.blueLight}44`,
+                  borderRadius: T.radiusSm, padding: '12px 14px',
+                  fontSize: 13, color: T.navy, textAlign: 'left',
+                  fontFamily: T.fontBody, lineHeight: 1.6, marginBottom: 16,
+                }}>
+                  <strong>💡 IA:</strong> {result.justificativaMeta}
+                </div>
+              )}
+
+              {result.outliersExcluidos?.length > 0 && (
+                <div style={{
+                  background: T.amberDim, border: `1px solid ${T.amber}44`,
+                  borderRadius: T.radiusSm, padding: '10px 14px',
+                  fontSize: 12, color: T.amber, textAlign: 'left',
+                  fontFamily: T.fontBody, marginBottom: 16,
+                }}>
+                  ⚠️ Outliers removidos: {result.outliersExcluidos.join(', ')}
+                </div>
+              )}
+            </div>
+
+            {/* Ações */}
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => navigate('/dashboard')}
+                style={{
+                  flex: 1, padding: '12px',
+                  background: `linear-gradient(135deg, ${T.navy}, ${T.navyLight})`,
+                  border: 'none', borderRadius: T.radius,
+                  color: '#fff', fontSize: 14, fontWeight: 700,
+                  fontFamily: T.fontDisplay, cursor: 'pointer',
+                }}
+              >
+                📊 Ver Dashboard
+              </button>
+              <button
+                onClick={handleEdit}
+                style={{
+                  flex: 1, padding: '12px',
+                  background: T.bgAlt, border: `1.5px solid ${T.border}`,
+                  borderRadius: T.radius,
+                  color: T.textMd, fontSize: 14, fontWeight: 600,
+                  fontFamily: T.fontBody, cursor: 'pointer',
+                }}
+              >
+                ✏️ Ajustar e Recalcular
+              </button>
+              <button
+                onClick={handleNew}
+                style={{
+                  flex: 1, padding: '12px',
+                  background: `linear-gradient(135deg, ${T.green}, ${T.greenDark})`,
+                  border: 'none', borderRadius: T.radius,
+                  color: '#fff', fontSize: 14, fontWeight: 700,
+                  fontFamily: T.fontDisplay, cursor: 'pointer',
+                }}
+              >
+                🎯 Nova Meta
+              </button>
+            </div>
+
+            {/* Compartilhar WhatsApp */}
+            {result.metaFinal && (
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(`🎯 *Meta MetasPro*\n\n*${form.nome_meta}*\n\nMeta: ${Number(result.metaFinal).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}\nMédia: ${Number(result.mediaCalculada).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}\nPressão: ${pressaoLabel}\n\nGerado pelo MetasPro`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  marginTop: 12, padding: '11px',
+                  background: T.whatsappDim, border: `1.5px solid ${T.whatsapp}44`,
+                  borderRadius: T.radius,
+                  color: T.whatsapp, fontSize: 14, fontWeight: 600,
+                  fontFamily: T.fontBody, textDecoration: 'none',
+                  transition: T.transition,
+                }}
+              >
+                📱 Compartilhar pelo WhatsApp
+              </a>
             )}
           </div>
-          <button onClick={() => navigate('/dashboard')} style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, padding: '5px 14px', color: C.textMd, fontSize: 12, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
-            ← Dashboard
-          </button>
         </div>
+      </>
+    );
+  }
 
-        {/* Body */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {!result && <Sidebar current={step} isEdit={isEdit} />}
+  // ── Wizard ─────────────────────────────────────────────────────────────────
+  return (
+    <>
+      <style>{globalCSS}</style>
+      <div ref={topRef} style={{ minHeight: '100vh', background: T.bg, fontFamily: T.fontBody, display: 'flex', flexDirection: 'column' }}>
 
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            {result ? (
-              <ResultScreen
-                result={result}
-                nomeMeta={form.nome_meta}
-                onEdit={handleEdit}
-                onNew={handleNew}
-                onDashboard={() => navigate('/dashboard')}
-              />
-            ) : (
-              <>
-                {step === 1 && <Step1 data={form} onChange={setField} unidades={unidades} loadingUnidades={loadingUni} />}
-                {step === 2 && <Step2 data={form} onChange={setField} />}
-                {step === 3 && <Step3 data={form} onChange={setField} />}
-                {step === 4 && <Step4 data={form} onChange={setField} />}
-                {step === 5 && <Step5 data={form} onChange={setField} />}
-                {step === 6 && <Step6 data={form} unidades={unidades} onSubmit={handleSubmit} loading={loading} error={error} isEdit={isEdit} />}
+        <NavbarMetasPro empresa={empresa} />
+        <StepBar current={step} />
 
-                {/* Navegação */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 36px 32px', gap: 12 }}>
-                  <button onClick={back} disabled={step === 1} style={{ padding: '11px 24px', background: 'transparent', border: `1px solid ${step === 1 ? C.border : C.borderHi}`, borderRadius: 10, color: step === 1 ? C.textDim : C.textMd, fontSize: 13, fontWeight: 600, cursor: step === 1 ? 'not-allowed' : 'pointer', fontFamily: "'DM Sans', sans-serif", transition: 'all 0.2s' }}>
-                    ← Voltar
-                  </button>
-                  <span style={{ fontSize: 11, color: C.textDim, fontFamily: "'Fira Code', monospace" }}>{step} / {STEPS.length}</span>
-                  {step < 6 && (
-                    <button onClick={next} disabled={!canProceed()} style={{ padding: '11px 28px', background: canProceed() ? `linear-gradient(135deg, ${C.blue}, #1e40af)` : C.border, border: 'none', borderRadius: 10, color: canProceed() ? '#fff' : C.textDim, fontSize: 13, fontWeight: 700, cursor: canProceed() ? 'pointer' : 'not-allowed', fontFamily: "'Sora', sans-serif", transition: 'all 0.2s', boxShadow: canProceed() ? '0 4px 16px rgba(37,99,235,0.25)' : 'none' }}>
-                      Continuar →
-                    </button>
+        <div style={{ flex: 1, maxWidth: 680, width: '100%', margin: '0 auto', padding: '28px 20px' }}>
+          <div style={{
+            background: T.surface, borderRadius: T.radiusXl,
+            border: `1px solid ${T.border}`, boxShadow: T.shadowMd,
+            padding: '28px 28px', animation: 'fadeIn 0.3s ease',
+          }}>
+
+            {/* Título da etapa */}
+            <div style={{ marginBottom: 24 }}>
+              <h2 style={{ fontFamily: T.fontDisplay, fontWeight: 800, fontSize: 20, color: T.navy, margin: 0 }}>
+                {STEPS[step - 1].label}
+              </h2>
+              <p style={{ margin: '3px 0 0', fontSize: 13, color: T.textDim, fontFamily: T.fontBody }}>
+                Etapa {step} de {STEPS.length}
+              </p>
+            </div>
+
+            {/* ── ETAPA 1: Identificação ───────────────────────────────────── */}
+            {step === 1 && (
+              <div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={labelSt}>Unidade de Monitoramento *</label>
+                  <select
+                    value={form.unidade_id}
+                    onChange={e => setForm({ ...form, unidade_id: e.target.value })}
+                    style={inputSt}
+                    onFocus={e => e.target.style.borderColor = T.borderFocus}
+                    onBlur={e => e.target.style.borderColor = T.border}
+                  >
+                    <option value="">Selecione a unidade</option>
+                    {unidades.map(u => (
+                      <option key={u.id} value={u.id}>{u.nome_unidade}</option>
+                    ))}
+                  </select>
+                  {unidades.length === 0 && (
+                    <p style={{ fontSize: 12, color: T.amber, marginTop: 4, fontFamily: T.fontBody }}>
+                      ⚠️ Nenhuma unidade encontrada. <button onClick={() => navigate('/onboarding')} style={{ color: T.blue, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Criar unidade</button>
+                    </p>
                   )}
                 </div>
-              </>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={labelSt}>Nome da Meta *</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Vendas Mensais, NPS, Inadimplência..."
+                    value={form.nome_meta}
+                    onChange={e => setForm({ ...form, nome_meta: e.target.value })}
+                    style={inputSt}
+                    onFocus={e => e.target.style.borderColor = T.borderFocus}
+                    onBlur={e => e.target.style.borderColor = T.border}
+                  />
+                </div>
+
+                <div>
+                  <label style={labelSt}>Objetivo Descritivo</label>
+                  <textarea
+                    placeholder="Descreva o objetivo desta meta..."
+                    value={form.objetivo_descritivo}
+                    onChange={e => setForm({ ...form, objetivo_descritivo: e.target.value })}
+                    rows={3}
+                    style={{ ...inputSt, resize: 'vertical', lineHeight: 1.5 }}
+                    onFocus={e => e.target.style.borderColor = T.borderFocus}
+                    onBlur={e => e.target.style.borderColor = T.border}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ── ETAPA 2: Direção ─────────────────────────────────────────── */}
+            {step === 2 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <OptionCard
+                  label="📈 Aumentar"
+                  desc="Objetivo de crescimento — vendas, produtividade, satisfação..."
+                  selected={form.direcao === 'AUMENTAR'}
+                  onClick={() => setForm({ ...form, direcao: 'AUMENTAR' })}
+                  color={T.green}
+                />
+                <OptionCard
+                  label="📉 Reduzir"
+                  desc="Objetivo de diminuição — inadimplência, retrabalho, erros..."
+                  selected={form.direcao === 'REDUZIR'}
+                  onClick={() => setForm({ ...form, direcao: 'REDUZIR' })}
+                  color={T.red}
+                />
+              </div>
+            )}
+
+            {/* ── ETAPA 3: Periodicidade ───────────────────────────────────── */}
+            {step === 3 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
+                {PERIODICIDADES.map(p => (
+                  <OptionCard
+                    key={p.value}
+                    label={p.label}
+                    desc={p.desc}
+                    selected={form.periodicidade === p.value}
+                    onClick={() => setForm({ ...form, periodicidade: p.value })}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* ── ETAPA 4: Pressão ─────────────────────────────────────────── */}
+            {step === 4 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {PRESSOES.map(p => (
+                  <OptionCard
+                    key={p.value}
+                    label={p.label}
+                    desc={`Meta atingível em ${p.value === 'MODERADO' ? '6 a 9' : p.value === 'INTERMEDIARIO' ? '3 a 6' : p.value === 'DESAFIADOR' ? '1 a 3' : '0 a 1'} dos 12 períodos históricos`}
+                    selected={form.nivel_pressao === p.value}
+                    onClick={() => setForm({ ...form, nivel_pressao: p.value })}
+                    color={p.color}
+                    badge={p.tag}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* ── ETAPA 5: Histórico ───────────────────────────────────────── */}
+            {step === 5 && (
+              <div>
+                <p style={{ fontSize: 13, color: T.textMd, fontFamily: T.fontBody, marginBottom: 16, lineHeight: 1.6 }}>
+                  Insira os valores históricos do indicador separados por vírgula, espaço ou ponto-e-vírgula.
+                  Mínimo de 3 períodos, ideal 12.
+                </p>
+                <textarea
+                  placeholder="Ex: 120, 135, 128, 142, 139, 151, 145, 160, 138, 155, 162, 170"
+                  value={form.historico}
+                  onChange={e => setForm({ ...form, historico: e.target.value })}
+                  rows={5}
+                  style={{ ...inputSt, resize: 'vertical', lineHeight: 1.6, fontFamily: T.fontMono, fontSize: 13 }}
+                  onFocus={e => e.target.style.borderColor = T.borderFocus}
+                  onBlur={e => e.target.style.borderColor = T.border}
+                />
+                {form.historico && (() => {
+                  const nums = form.historico.split(/[\s,;]+/).filter(v => v !== '').map(Number);
+                  const valid = nums.filter(n => !isNaN(n));
+                  return (
+                    <p style={{ fontSize: 12, color: valid.length >= 3 ? T.green : T.amber, marginTop: 6, fontFamily: T.fontBody }}>
+                      {valid.length >= 3 ? `✓ ${valid.length} valores válidos` : `⚠️ ${valid.length} valores — mínimo 3`}
+                    </p>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* ── ETAPA 6: Revisão ─────────────────────────────────────────── */}
+            {step === 6 && (
+              <div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+                  {[
+                    { label: 'Meta',          value: form.nome_meta         },
+                    { label: 'Direção',        value: form.direcao           },
+                    { label: 'Periodicidade',  value: form.periodicidade     },
+                    { label: 'Nível Pressão',  value: form.nivel_pressao     },
+                    { label: 'Histórico',      value: form.historico ? `${form.historico.split(/[\s,;]+/).filter(v=>v!=='').length} valores` : '—' },
+                  ].map(item => (
+                    <div key={item.label} style={{
+                      display: 'flex', justifyContent: 'space-between',
+                      padding: '10px 14px', background: T.bgAlt,
+                      borderRadius: T.radiusSm, gap: 12,
+                    }}>
+                      <span style={{ fontSize: 13, color: T.textMd, fontFamily: T.fontBody }}>{item.label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: T.navy, fontFamily: T.fontDisplay, textAlign: 'right' }}>{item.value || '—'}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {error && (
+                  <div style={{
+                    background: T.redDim, border: `1px solid ${T.red}33`,
+                    borderRadius: T.radiusSm, padding: '10px 14px',
+                    color: T.red, fontSize: 13, marginBottom: 16, fontFamily: T.fontBody,
+                  }}>
+                    ⚠️ {error}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleCalcular}
+                  disabled={loading}
+                  style={{
+                    width: '100%', padding: '14px',
+                    background: loading ? T.bgAlt : `linear-gradient(135deg, ${T.green}, ${T.greenDark})`,
+                    border: 'none', borderRadius: T.radius,
+                    color: loading ? T.textDim : '#fff',
+                    fontSize: 16, fontWeight: 700,
+                    fontFamily: T.fontDisplay, cursor: loading ? 'not-allowed' : 'pointer',
+                    boxShadow: loading ? 'none' : '0 4px 20px rgba(22,163,74,0.3)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    transition: T.transition,
+                  }}
+                >
+                  {loading && <span style={{ width: 18, height: 18, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />}
+                  {loading ? 'Processando com IA...' : '🎯 Calcular Meta com IA'}
+                </button>
+              </div>
+            )}
+
+            {/* ── Navegação entre etapas ────────────────────────────────────── */}
+            {step < 6 && (
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                marginTop: 28, paddingTop: 20, borderTop: `1px solid ${T.border}`,
+              }}>
+                <button
+                  onClick={prev}
+                  disabled={step === 1}
+                  style={{
+                    padding: '9px 20px',
+                    background: 'transparent',
+                    border: `1.5px solid ${step === 1 ? T.border : T.borderHi}`,
+                    borderRadius: T.radiusSm,
+                    color: step === 1 ? T.textDim : T.textMd,
+                    fontSize: 13, fontWeight: 600,
+                    fontFamily: T.fontBody,
+                    cursor: step === 1 ? 'not-allowed' : 'pointer',
+                    transition: T.transition,
+                  }}
+                >
+                  ← Voltar
+                </button>
+
+                <span style={{ fontSize: 12, color: T.textDim, fontFamily: T.fontBody }}>
+                  {step} / {STEPS.length}
+                </span>
+
+                <button
+                  onClick={next}
+                  disabled={!canProceed()}
+                  style={{
+                    padding: '9px 24px',
+                    background: canProceed()
+                      ? `linear-gradient(135deg, ${T.navy}, ${T.navyLight})`
+                      : T.bgAlt,
+                    border: 'none',
+                    borderRadius: T.radiusSm,
+                    color: canProceed() ? '#fff' : T.textDim,
+                    fontSize: 13, fontWeight: 700,
+                    fontFamily: T.fontDisplay,
+                    cursor: canProceed() ? 'pointer' : 'not-allowed',
+                    boxShadow: canProceed() ? '0 4px 14px rgba(15,45,82,0.2)' : 'none',
+                    transition: T.transition,
+                  }}
+                >
+                  Continuar →
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -876,3 +663,20 @@ export default function GoalWizard() {
     </>
   );
 }
+
+// ─── Estilos reutilizáveis ────────────────────────────────────────────────────
+const labelSt = {
+  display: 'block', fontSize: 12, fontWeight: 600,
+  color: '#475569', marginBottom: 5,
+  fontFamily: "'DM Sans', sans-serif",
+};
+
+const inputSt = {
+  width: '100%', padding: '10px 14px',
+  background: '#f8fafc',
+  border: '1.5px solid #e2e8f0',
+  borderRadius: '8px',
+  color: '#0f2d52', fontSize: 14,
+  outline: 'none', transition: 'border-color 0.2s',
+  fontFamily: "'DM Sans', sans-serif",
+};
