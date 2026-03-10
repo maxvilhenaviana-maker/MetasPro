@@ -60,16 +60,18 @@ app.get('/api/health', (req, res) => {
 
 // Registro de Usuário
 app.post('/api/auth/register', async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, nome, email, password, senha } = req.body;
+  const nomeRecebido = nome || name;
+  const senhaRecebida = senha || password;
   try {
     const userExists = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
     if (userExists.rows.length > 0) return res.status(400).json({ error: 'E-mail já cadastrado.' });
 
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(senhaRecebida, salt);
     const result = await pool.query(
       'INSERT INTO usuarios (nome, email, senha_hash) VALUES ($1, $2, $3) RETURNING id, nome, email',
-      [name, email, hashedPassword]
+      [nomeRecebido, email, hashedPassword]
     );
 
     const token = jwt.sign({ id: result.rows[0].id }, process.env.JWT_SECRET || 'secret', { expiresIn: '8h' });
@@ -82,13 +84,16 @@ app.post('/api/auth/register', async (req, res) => {
 
 // Login
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, senha, password } = req.body;
+  const senhaRecebida = senha || password;
   try {
     const result = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
     const user = result.rows[0];
     if (!user) return res.status(401).json({ error: 'Credenciais inválidas' });
 
-    const validPassword = await bcrypt.compare(password, user.senha_hash || user.password || '');
+    const hashArmazenado = user.senha_hash || user.password;
+    if (!hashArmazenado || !senhaRecebida) return res.status(401).json({ error: 'Credenciais inválidas' });
+    const validPassword = await bcrypt.compare(senhaRecebida, hashArmazenado);
     if (!validPassword) return res.status(401).json({ error: 'Credenciais inválidas' });
 
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET || 'secret', { expiresIn: '8h' });
