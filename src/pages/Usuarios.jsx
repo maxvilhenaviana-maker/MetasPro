@@ -443,7 +443,7 @@ function FormularioUsuario({ modo, usuarioInicial, onSalvar, onCancelar, loading
 }
 
 // ─── Tabela de Consulta ───────────────────────────────────────────────────────
-function TabelaUsuarios({ usuarios, onEditar, onExcluir, busca }) {
+function TabelaUsuarios({ usuarios, onEditar, onExcluir, onVerDetalhes, busca }) {
   const filtrados = usuarios.filter(u =>
     u.nome.toLowerCase().includes(busca.toLowerCase()) ||
     u.email.toLowerCase().includes(busca.toLowerCase()) ||
