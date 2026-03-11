@@ -185,8 +185,9 @@ function ModalDetalhes({ usuario, onFechar, onEditar, carregando }) {
         background: '#fff', borderRadius: 16,
         padding: '28px 24px', width: '100%', maxWidth: 440,
         boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+        maxHeight: '90vh', display: 'flex', flexDirection: 'column',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexShrink: 0 }}>
           <h3 style={{ fontFamily: "'Sora', sans-serif", fontWeight: 700, fontSize: 18, color: '#0f2d52', margin: 0 }}>
             👤 Detalhes do Usuário
           </h3>
@@ -196,7 +197,7 @@ function ModalDetalhes({ usuario, onFechar, onEditar, carregando }) {
           }}>×</button>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24, overflowY: 'auto', flexGrow: 1 }}>
           {campos.map(({ label, valor }) => (
             <div key={label} style={{
               display: 'flex', flexDirection: 'column', gap: 3,
@@ -214,7 +215,7 @@ function ModalDetalhes({ usuario, onFechar, onEditar, carregando }) {
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
           <button onClick={onFechar} style={{
             flex: 1, padding: '10px 0',
             background: '#f8fafc', border: '1.5px solid #e2e8f0',
