@@ -147,6 +147,81 @@ function Toast({ msg, tipo, onClose }) {
   );
 }
 
+// ─── Modal de Detalhes do Usuário ────────────────────────────────────────────
+function ModalDetalhes({ usuario, onFechar, onEditar }) {
+  if (!usuario) return null;
+  const campos = [
+    { label: 'ID',           valor: usuario.id },
+    { label: 'Nome',         valor: usuario.nome },
+    { label: 'E-mail',       valor: usuario.email },
+    { label: 'Papel',        valor: <Badge papel={usuario.papel} /> },
+    { label: 'Status',       valor: <StatusDot ativo={usuario.ativo} /> },
+    { label: 'Cadastro',     valor: usuario.created_at ? new Date(usuario.created_at).toLocaleString('pt-BR') : '—' },
+    { label: 'Login Google', valor: usuario.google_id ? '✅ Vinculado' : '— Não vinculado' },
+  ];
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(15,45,82,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 1000, animation: 'fadeIn 0.2s ease', padding: '16px',
+    }}>
+      <div style={{
+        background: '#fff', borderRadius: 16,
+        padding: '28px 24px', width: '100%', maxWidth: 440,
+        boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <h3 style={{ fontFamily: "'Sora', sans-serif", fontWeight: 700, fontSize: 18, color: '#0f2d52', margin: 0 }}>
+            👤 Detalhes do Usuário
+          </h3>
+          <button onClick={onFechar} style={{
+            background: 'none', border: 'none', fontSize: 20,
+            cursor: 'pointer', color: '#94a3b8', lineHeight: 1,
+          }}>×</button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+          {campos.map(({ label, valor }) => (
+            <div key={label} style={{
+              display: 'flex', flexDirection: 'column', gap: 3,
+              padding: '10px 14px',
+              background: '#f8fafc', borderRadius: 8,
+              border: '1px solid #e2e8f0',
+            }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {label}
+              </span>
+              <span style={{ fontSize: 13, color: '#0f2d52', fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>
+                {valor}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onFechar} style={{
+            flex: 1, padding: '10px 0',
+            background: '#f8fafc', border: '1.5px solid #e2e8f0',
+            borderRadius: 8, color: '#64748b', fontSize: 13,
+            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+          }}>
+            Fechar
+          </button>
+          <button onClick={() => { onFechar(); onEditar(usuario); }} style={{
+            flex: 2, padding: '10px 0',
+            background: '#0f2d52', border: 'none',
+            borderRadius: 8, color: '#fff', fontSize: 13,
+            fontWeight: 600, cursor: 'pointer',
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
+            ✏️ Editar este usuário
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Modal de Confirmação de Exclusão ─────────────────────────────────────────
 function ModalConfirmar({ usuario, onConfirmar, onCancelar, loading }) {
   return (
@@ -398,7 +473,18 @@ function TabelaUsuarios({ usuarios, onEditar, onExcluir, busca }) {
               onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? T.surface : T.bgAlt}
             >
               <td style={{ padding: '11px 14px', fontFamily: T.fontBody, fontSize: 13, color: T.text, fontWeight: 600 }}>
-                {u.nome}
+                <button
+                  onClick={() => onVerDetalhes && onVerDetalhes(u)}
+                  title="Ver detalhes"
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: T.navy, fontWeight: 600, fontSize: 13,
+                    fontFamily: T.fontBody, padding: 0, textDecoration: 'underline dotted',
+                    textDecorationColor: T.border,
+                  }}
+                >
+                  {u.nome}
+                </button>
               </td>
               <td style={{ padding: '11px 14px', fontFamily: T.fontBody, fontSize: 13, color: T.textMd }}>
                 {u.email}
@@ -410,7 +496,7 @@ function TabelaUsuarios({ usuarios, onEditar, onExcluir, busca }) {
                 <StatusDot ativo={u.ativo} />
               </td>
               <td style={{ padding: '11px 14px', fontFamily: T.fontBody, fontSize: 12, color: T.textDim, whiteSpace: 'nowrap' }}>
-                {u.criado_em ? new Date(u.criado_em).toLocaleDateString('pt-BR') : '—'}
+                {u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '—'}
               </td>
               <td style={{ padding: '11px 14px' }}>
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -461,6 +547,7 @@ export default function Usuarios() {
   const [busca, setBusca] = useState('');
   const [usuarioEditando, setUsuarioEditando] = useState(null);
   const [usuarioExcluindo, setUsuarioExcluindo] = useState(null);
+  const [usuarioDetalhes, setUsuarioDetalhes] = useState(null);
   const [toast, setToast] = useState(null);
 
   const showToast = (msg, tipo = 'sucesso') => setToast({ msg, tipo });
@@ -649,6 +736,7 @@ export default function Usuarios() {
             busca={busca}
             onEditar={acao === 'alterar' ? handleEditarDaTabela : handleEditarDaTabela}
             onExcluir={u => setUsuarioExcluindo(u)}
+            onVerDetalhes={u => setUsuarioDetalhes(u)}
           />
         </div>
       )}
@@ -669,6 +757,12 @@ export default function Usuarios() {
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         * { box-sizing: border-box; }
+        .tabs-acoes { flex-direction: row; width: fit-content; }
+        .tab-btn { width: auto; justify-content: center; }
+        @media (max-width: 480px) {
+          .tabs-acoes { flex-direction: column !important; width: 100% !important; }
+          .tab-btn { width: 100% !important; justify-content: flex-start !important; }
+        }
       `}</style>
 
       <NavbarMetasPro />
@@ -695,12 +789,11 @@ export default function Usuarios() {
             </p>
           </div>
 
-          {/* Tabs de ação */}
-          <div style={{
+          {/* Tabs de ação — responsivo */}
+          <div className="tabs-acoes" style={{
             display: 'flex', gap: 6, marginBottom: 24,
             background: T.surface, borderRadius: T.radius,
             border: `1px solid ${T.border}`, padding: 6,
-            width: 'fit-content',
           }}>
             {TABS.map(tab => {
               const ativo = acao === tab.key;
@@ -711,8 +804,9 @@ export default function Usuarios() {
                     setUsuarioEditando(null);
                     setSearchParams({ acao: tab.key });
                   }}
+                  className="tab-btn"
                   style={{
-                    padding: '7px 16px',
+                    padding: '10px 16px',
                     background: ativo ? T.navy : 'transparent',
                     border: 'none', borderRadius: T.radiusSm,
                     color: ativo ? '#fff' : T.textMd,
@@ -751,6 +845,15 @@ export default function Usuarios() {
           </div>
         </div>
       </div>
+
+      {/* Modal de detalhes */}
+      {usuarioDetalhes && (
+        <ModalDetalhes
+          usuario={usuarioDetalhes}
+          onFechar={() => setUsuarioDetalhes(null)}
+          onEditar={(u) => { setUsuarioDetalhes(null); handleEditarDaTabela(u); }}
+        />
+      )}
 
       {/* Modal de exclusão */}
       {usuarioExcluindo && (
