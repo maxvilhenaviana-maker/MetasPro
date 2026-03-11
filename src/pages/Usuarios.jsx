@@ -156,7 +156,22 @@ function ModalDetalhes({ usuario, onFechar, onEditar }) {
     { label: 'E-mail',       valor: usuario.email },
     { label: 'Papel',        valor: <Badge papel={usuario.papel} /> },
     { label: 'Status',       valor: <StatusDot ativo={usuario.ativo} /> },
-    { label: 'Cadastro',     valor: usuario.created_at ? new Date(usuario.created_at).toLocaleString('pt-BR') : '—' },
+    { label: 'Empresa',      valor: usuario.nome_fantasia || usuario.razao_social || '—' },
+    { label: 'Razão Social', valor: usuario.razao_social || '—' },
+    { label: 'CNPJ',         valor: usuario.cnpj || '—' },
+    { label: 'Unidades Monitoradas', valor: usuario.unidades && usuario.unidades.length > 0
+        ? <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {usuario.unidades.map(u => (
+              <span key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: u.ativo ? '#16a34a' : '#94a3b8', display: 'inline-block', flexShrink: 0 }} />
+                {u.nome_unidade}
+                <span style={{ color: '#94a3b8', fontSize: 11 }}>({u.codigo_unidade})</span>
+              </span>
+            ))}
+          </div>
+        : '— Nenhuma unidade cadastrada'
+    },
+    { label: 'Cadastro',     valor: usuario.created_at ? new Date(usuario.created_at).toLocaleString('pt-BR') : (usuario.data_cadastro ? new Date(usuario.data_cadastro).toLocaleString('pt-BR') : '—') },
     { label: 'Login Google', valor: usuario.google_id ? '✅ Vinculado' : '— Não vinculado' },
   ];
   return (
