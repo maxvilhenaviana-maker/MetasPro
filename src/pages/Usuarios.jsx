@@ -155,8 +155,24 @@ function ModalDetalhes({ usuario, onFechar, onEditar, carregando }) {
     { label: 'Nome',         valor: usuario.nome },
     { label: 'E-mail',       valor: usuario.email },
     { label: 'Papel',        valor: <Badge papel={usuario.papel} /> },
-    { label: 'Status',       valor: <StatusDot ativo={usuario.ativo} /> },
-    { label: 'Cadastro',     valor: usuario.created_at ? new Date(usuario.created_at).toLocaleString('pt-BR') : '—' },
+    { label: 'Status',       valor: <StatusDot ativo={usuario.usuario_ativo ?? usuario.ativo} /> },
+    { label: 'Empresa',      valor: usuario.nome_fantasia || usuario.razao_social || '—' },
+    { label: 'Razão Social', valor: usuario.razao_social || '—' },
+    { label: 'CNPJ',         valor: usuario.cnpj || '—' },
+    { label: 'Unidades',     valor: carregando
+        ? <span style={{ fontSize: 12, color: '#94a3b8' }}>Carregando...</span>
+        : usuario.unidades && usuario.unidades.length > 0
+          ? <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {usuario.unidades.map(u => (
+                <span key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />
+                  {u.nome_unidade} <span style={{ color: '#94a3b8', fontSize: 11 }}>({u.codigo_unidade})</span>
+                </span>
+              ))}
+            </div>
+          : '— Nenhuma unidade cadastrada'
+    },
+    { label: 'Cadastro',     valor: usuario.data_cadastro ? new Date(usuario.data_cadastro).toLocaleString('pt-BR') : '—' },
     { label: 'Login Google', valor: usuario.google_id ? '✅ Vinculado' : '— Não vinculado' },
   ];
   return (
@@ -493,7 +509,7 @@ function TabelaUsuarios({ usuarios, onEditar, onExcluir, busca }) {
                 <Badge papel={u.papel} />
               </td>
               <td style={{ padding: '11px 14px' }}>
-                <StatusDot ativo={u.ativo} />
+                <StatusDot ativo={u.usuario_ativo ?? u.ativo} />
               </td>
               <td style={{ padding: '11px 14px', fontFamily: T.fontBody, fontSize: 12, color: T.textDim, whiteSpace: 'nowrap' }}>
                 {u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '—'}
@@ -552,13 +568,13 @@ export default function Usuarios() {
   const [toast, setToast] = useState(null);
 
   const handleVerDetalhes = async (u) => {
-    setUsuarioDetalhes(u); // abre modal imediatamente com dados parciais
+    setUsuarioDetalhes(u);
     setCarregandoDetalhes(true);
     try {
       const { data } = await api.get(`/usuarios/${u.id}`);
-      setUsuarioDetalhes(data); // atualiza com dados completos da API
+      setUsuarioDetalhes(data);
     } catch {
-      // mantém dados parciais se falhar
+      // mantém dados parciais
     } finally {
       setCarregandoDetalhes(false);
     }
