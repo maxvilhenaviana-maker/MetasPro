@@ -147,8 +147,12 @@ app.get('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
 
     const result = await pool.query(
       `SELECT
-         u.id, u.nome, u.email, u.ativo, u.created_at,
-         eu.papel, eu.ativo AS vinculo_ativo
+         u.id, u.nome, u.email,
+         u.ativo AS usuario_ativo,
+         u.data_cadastro,
+         u.google_id, u.avatar_url,
+         eu.papel,
+         eu.ativo AS vinculo_ativo
        FROM usuarios u
        INNER JOIN empresa_usuarios eu ON eu.usuario_id = u.id
        WHERE eu.empresa_id = $1
@@ -157,8 +161,8 @@ app.get('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
     );
     res.json({ usuarios: result.rows, empresaId });
   } catch (err) {
-    console.error('Erro ao listar usuários:', err);
-    res.status(500).json({ error: 'Erro ao buscar usuários.' });
+    console.error('Erro ao listar usuários:', err.message);
+    res.status(500).json({ error: 'Erro ao buscar usuários.', detalhe: err.message });
   }
 });
 
@@ -195,10 +199,14 @@ app.get('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
 
     const result = await pool.query(
       `SELECT
-         u.id, u.nome, u.email, u.ativo, u.created_at,
-         u.google_id, u.avatar_url, u.data_cadastro,
-         eu.papel, eu.ativo AS vinculo_ativo,
-         e.id AS empresa_id, e.nome_fantasia, e.razao_social, e.cnpj
+         u.id, u.nome, u.email,
+         u.ativo AS usuario_ativo,
+         u.data_cadastro,
+         u.google_id, u.avatar_url,
+         eu.papel,
+         eu.ativo AS vinculo_ativo,
+         e.id AS empresa_id,
+         e.nome_fantasia, e.razao_social, e.cnpj
        FROM usuarios u
        INNER JOIN empresa_usuarios eu ON eu.usuario_id = u.id
        INNER JOIN empresas e ON e.id = eu.empresa_id
@@ -208,17 +216,14 @@ app.get('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
     const usuario = result.rows[0];
-
-    // Busca unidades da empresa do usuário
     const unidadesRes = await pool.query(
       `SELECT id, nome_unidade, codigo_unidade, ativo
        FROM unidades_monitoradas
-       WHERE empresa_id = $1
+       WHERE empresa_id = $1 AND ativo = true
        ORDER BY nome_unidade ASC`,
       [usuario.empresa_id]
     );
     usuario.unidades = unidadesRes.rows;
-
     res.json(usuario);
   } catch (err) {
     console.error('Erro ao buscar usuário:', err);
