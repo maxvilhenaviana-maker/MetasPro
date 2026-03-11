@@ -147,7 +147,7 @@ app.get('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
 
     const result = await pool.query(
       `SELECT
-         u.id, u.nome, u.email, u.ativo, u.criado_em,
+         u.id, u.nome, u.email, u.ativo, u.created_at,
          eu.papel, eu.ativo AS vinculo_ativo
        FROM usuarios u
        INNER JOIN empresa_usuarios eu ON eu.usuario_id = u.id
@@ -165,7 +165,7 @@ app.get('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
 app.get('/api/usuarios/me/perfil', autenticar, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT u.id, u.nome, u.email, u.ativo, u.criado_em,
+      `SELECT u.id, u.nome, u.email, u.ativo, u.created_at,
               eu.papel, eu.empresa_id,
               e.nome_fantasia, e.razao_social
        FROM usuarios u
@@ -195,7 +195,7 @@ app.get('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
 
     const result = await pool.query(
       `SELECT
-         u.id, u.nome, u.email, u.ativo, u.criado_em,
+         u.id, u.nome, u.email, u.ativo, u.created_at,
          eu.papel, eu.ativo AS vinculo_ativo
        FROM usuarios u
        INNER JOIN empresa_usuarios eu ON eu.usuario_id = u.id
@@ -243,7 +243,7 @@ app.post('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
     const novoUser = await client.query(
       `INSERT INTO usuarios (nome, email, senha_hash, ativo)
        VALUES ($1, $2, $3, true)
-       RETURNING id, nome, email, ativo, criado_em`,
+       RETURNING id, nome, email, ativo, created_at`,
       [nome, email, senhaHash]
     );
 
@@ -324,7 +324,7 @@ app.put('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
     await client.query('COMMIT');
 
     const updated = await pool.query(
-      `SELECT u.id, u.nome, u.email, u.ativo, u.criado_em, eu.papel
+      `SELECT u.id, u.nome, u.email, u.ativo, u.created_at, eu.papel
        FROM usuarios u
        INNER JOIN empresa_usuarios eu ON eu.usuario_id = u.id
        WHERE eu.empresa_id = $1 AND u.id = $2`,
