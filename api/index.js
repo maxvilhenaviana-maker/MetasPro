@@ -430,4 +430,24 @@ app.get('/api/usuarios/me/perfil', autenticar, async (req, res) => {
   }
 });
 
+// ─── ROTA TEMPORÁRIA DE RESET — remover após uso ──────────────────────────────
+app.post('/api/auth/reset-temp', async (req, res) => {
+  const { secret, email, novaSenha } = req.body;
+  if (secret !== 'metaspro-reset-2026') return res.status(403).json({ error: 'Negado.' });
+  if (!email || !novaSenha) return res.status(400).json({ error: 'email e novaSenha obrigatórios.' });
+  try {
+    const salt = await bcrypt.genSalt(10);
+    const hash = await bcrypt.hash(novaSenha, salt);
+    const result = await pool.query(
+      'UPDATE usuarios SET senha_hash = $1 WHERE email = $2 RETURNING id, email',
+      [hash, email]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado.' });
+    res.json({ ok: true, usuario: result.rows[0] });
+  } catch (err) {
+    console.error('Erro reset-temp:', err);
+    res.status(500).json({ error: 'Erro interno.' });
+  }
+});
+
 module.exports = app;
