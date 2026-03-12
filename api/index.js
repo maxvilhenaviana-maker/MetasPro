@@ -63,8 +63,6 @@ const senhaRecebida = senha || password;
 try {
 const userExists = await pool.query(‘SELECT * FROM usuarios WHERE email = $1’, [email]);
 if (userExists.rows.length > 0) return res.status(400).json({ error: ‘E-mail ja cadastrado.’ });
-
-```
 const salt = await bcrypt.genSalt(10);
 const hashedPassword = await bcrypt.hash(senhaRecebida, salt);
 const result = await pool.query(
@@ -74,7 +72,7 @@ const result = await pool.query(
 
 const token = jwt.sign({ id: result.rows[0].id }, process.env.JWT_SECRET || 'secret', { expiresIn: '8h' });
 res.status(201).json({ token, user: result.rows[0] });
-```
+
 
 } catch (err) {
 console.error(‘Erro no registro:’, err);
@@ -91,7 +89,7 @@ const result = await pool.query(‘SELECT * FROM usuarios WHERE email = $1’, [
 const user = result.rows[0];
 if (!user) return res.status(401).json({ error: ‘Credenciais invalidas’ });
 
-```
+
 const hashArmazenado = user.senha_hash || user.password;
 if (!hashArmazenado || !senhaRecebida) return res.status(401).json({ error: 'Credenciais invalidas' });
 const validPassword = await bcrypt.compare(senhaRecebida, hashArmazenado);
@@ -99,7 +97,7 @@ if (!validPassword) return res.status(401).json({ error: 'Credenciais invalidas'
 
 const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET || 'secret', { expiresIn: '8h' });
 return res.json({ token, user: { id: user.id, nome: user.nome, email: user.email } });
-```
+
 
 } catch (err) {
 console.error(‘Erro no login:’, err);
@@ -117,7 +115,7 @@ audience: process.env.GOOGLE_CLIENT_ID,
 });
 const { email, name, sub: googleId } = ticket.getPayload();
 
-```
+
 let result = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
 let user = result.rows[0];
 
@@ -131,7 +129,7 @@ if (!user) {
 
 const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET || 'secret', { expiresIn: '8h' });
 res.json({ token, user: { id: user.id, nome: user.nome, email: user.email } });
-```
+
 
 } catch (error) {
 console.error(‘Erro Google auth:’, error);
@@ -153,7 +151,7 @@ return res.status(403).json({ error: ‘Nenhuma empresa vinculada ao administrad
 }
 const empresaId = empresaRes.rows[0].empresa_id;
 
-```
+
 const result = await pool.query(
   `SELECT
      u.id, u.nome, u.email,
@@ -170,7 +168,7 @@ const result = await pool.query(
   [empresaId]
 );
 res.json({ usuarios: result.rows, empresaId });
-```
+
 
 } catch (err) {
 console.error(‘Erro ao listar usuarios:’, err.message);
@@ -204,7 +202,7 @@ const empresaRes = await pool.query(
 if (empresaRes.rows.length === 0) return res.status(403).json({ error: ‘Sem empresa vinculada.’ });
 const empresaId = empresaRes.rows[0].empresa_id;
 
-```
+
 const result = await pool.query(
   `SELECT
      u.id, u.nome, u.email,
@@ -233,7 +231,7 @@ const unidadesRes = await pool.query(
 );
 usuario.unidades = unidadesRes.rows;
 res.json(usuario);
-```
+
 
 } catch (err) {
 console.error(‘Erro ao buscar usuario:’, err);
@@ -257,7 +255,7 @@ const client = await pool.connect();
 try {
 await client.query(‘BEGIN’);
 
-```
+
 const empresaRes = await client.query(
   `SELECT empresa_id FROM empresa_usuarios WHERE usuario_id = $1 AND papel = 'ADMIN' AND ativo = true LIMIT 1`,
   [req.userId]
@@ -289,7 +287,7 @@ await client.query(
 
 await client.query('COMMIT');
 res.status(201).json({ ...novoUser.rows[0], papel });
-```
+
 
 } catch (err) {
 await client.query(‘ROLLBACK’);
@@ -309,7 +307,7 @@ const client = await pool.connect();
 try {
 await client.query(‘BEGIN’);
 
-```
+
 const empresaRes = await client.query(
   `SELECT empresa_id FROM empresa_usuarios WHERE usuario_id = $1 AND papel = 'ADMIN' AND ativo = true LIMIT 1`,
   [req.userId]
@@ -371,7 +369,7 @@ const updated = await pool.query(
   [empresaId, id]
 );
 res.json(updated.rows[0]);
-```
+
 
 } catch (err) {
 await client.query(‘ROLLBACK’);
@@ -394,7 +392,7 @@ const client = await pool.connect();
 try {
 await client.query(‘BEGIN’);
 
-```
+
 const empresaRes = await client.query(
   `SELECT empresa_id FROM empresa_usuarios WHERE usuario_id = $1 AND papel = 'ADMIN' AND ativo = true LIMIT 1`,
   [req.userId]
@@ -417,7 +415,7 @@ await client.query(`UPDATE usuarios SET ativo = false WHERE id = $1`, [id]);
 
 await client.query('COMMIT');
 res.json({ mensagem: 'Usuario desativado com sucesso.', id: parseInt(id) });
-```
+
 
 } catch (err) {
 await client.query(‘ROLLBACK’);
