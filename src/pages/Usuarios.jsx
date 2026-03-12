@@ -525,7 +525,33 @@ function FormularioAlterar({ usuarioInicial, onSalvar, onCancelar, loading }) {
     papel:          usuarioInicial?.papel || 'DESIGNADO_LANCADOR',
     ativo:          usuarioInicial?.ativo !== false,
   });
+  const [unidadesSelecionadas, setUnidadesSelecionadas] = useState([]);
+  const [unidades, setUnidades]                         = useState([]);
+  const [carregandoUnidades, setCarregandoUnidades]     = useState(true);
   const [erros, setErros] = useState({});
+
+  // Carrega dados completos do usuário (com unidades vinculadas) e unidades da empresa
+  useEffect(() => {
+    if (!usuarioInicial?.id) return;
+    setCarregandoUnidades(true);
+
+    // Busca detalhes do usuário (traz unidades já vinculadas e empresa_id)
+    api.get(`/usuarios/${usuarioInicial.id}`)
+      .then(({ data }) => {
+        // Pré-marca as unidades que já estão vinculadas
+        const vinculadas = (data.unidades || []).map(u => u.id);
+        setUnidadesSelecionadas(vinculadas);
+
+        // Com o empresa_id em mãos, carrega todas as unidades disponíveis
+        const empresaId = data.empresa_id;
+        if (empresaId) {
+          return api.get(`/opcoes/unidades?empresa_id=${empresaId}`)
+            .then(({ data: d }) => setUnidades(d.unidades || []));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setCarregandoUnidades(false));
+  }, [usuarioInicial?.id]);
 
   const set = (campo) => (e) => {
     setForm(f => ({ ...f, [campo]: e.target.value }));
@@ -543,7 +569,12 @@ function FormularioAlterar({ usuarioInicial, onSalvar, onCancelar, loading }) {
   const handleSubmit = () => {
     const e = validar();
     if (Object.keys(e).length > 0) { setErros(e); return; }
-    const payload = { nome: form.nome.trim(), papel: form.papel, ativo: form.ativo };
+    const payload = {
+      nome:     form.nome.trim(),
+      papel:    form.papel,
+      ativo:    form.ativo,
+      unidades: unidadesSelecionadas,
+    };
     if (form.senha) payload.novaSenha = form.senha;
     onSalvar(payload);
   };
@@ -556,7 +587,7 @@ function FormularioAlterar({ usuarioInicial, onSalvar, onCancelar, loading }) {
     <div style={{
       background: T.surface, borderRadius: T.radiusLg,
       border: `1px solid ${T.border}`, boxShadow: T.shadow,
-      padding: 28, maxWidth: 520,
+      padding: 28, maxWidth: 560,
     }}>
       <h3 style={{
         fontFamily: T.fontDisplay, fontWeight: 700,
@@ -605,6 +636,18 @@ function FormularioAlterar({ usuarioInicial, onSalvar, onCancelar, loading }) {
           />
           <span style={{ fontSize: 13, color: T.textMd, fontFamily: T.fontBody }}>Usuário ativo</span>
         </label>
+      </Campo>
+
+      <Campo
+        label="Unidades de Monitoramento"
+        dica="Marque as unidades que este usuário poderá acessar."
+      >
+        <SeletorUnidades
+          unidades={unidades}
+          selecionadas={unidadesSelecionadas}
+          onChange={setUnidadesSelecionadas}
+          carregando={carregandoUnidades}
+        />
       </Campo>
 
       <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
