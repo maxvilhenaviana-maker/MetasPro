@@ -16,11 +16,11 @@ ssl: { rejectUnauthorized: false }
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// ─── Middleware de autenticação JWT ───────────────────────────────────────────
+// — Middleware de autenticacao JWT —
 function autenticar(req, res, next) {
 const authHeader = req.headers.authorization;
 if (!authHeader || !authHeader.startsWith(’Bearer ‘)) {
-return res.status(401).json({ error: ‘Token não fornecido.’ });
+return res.status(401).json({ error: ‘Token nao fornecido.’ });
 }
 const token = authHeader.split(’ ’)[1];
 try {
@@ -28,11 +28,11 @@ const decoded = jwt.verify(token, process.env.JWT_SECRET || ‘secret’);
 req.userId = decoded.id;
 next();
 } catch {
-return res.status(401).json({ error: ‘Token inválido ou expirado.’ });
+return res.status(401).json({ error: ‘Token invalido ou expirado.’ });
 }
 }
 
-// ─── Middleware de permissão ADMIN ────────────────────────────────────────────
+// — Middleware de permissao ADMIN —
 async function apenasAdmin(req, res, next) {
 try {
 const result = await pool.query(
@@ -44,32 +44,32 @@ return res.status(403).json({ error: ‘Acesso restrito a administradores.’ })
 }
 next();
 } catch (err) {
-res.status(500).json({ error: ‘Erro ao verificar permissões.’ });
+res.status(500).json({ error: ‘Erro ao verificar permissoes.’ });
 }
 }
 
-// ─── Rota de Teste ────────────────────────────────────────────────────────────
+// — Rota de Teste —
 app.get(’/api/health’, (req, res) => {
-res.json({ status: ‘MetasPro API está operando’ });
+res.json({ status: ‘MetasPro API esta operando’ });
 });
 
-// ─── AUTENTICAÇÃO ─────────────────────────────────────────────────────────────
+// — AUTENTICACAO —
 
-// Registro de Usuário
+// Registro de Usuario
 app.post(’/api/auth/register’, async (req, res) => {
 const { name, nome, email, password, senha } = req.body;
 const nomeRecebido = nome || name;
 const senhaRecebida = senha || password;
 try {
 const userExists = await pool.query(‘SELECT * FROM usuarios WHERE email = $1’, [email]);
-if (userExists.rows.length > 0) return res.status(400).json({ error: ‘E-mail já cadastrado.’ });
+if (userExists.rows.length > 0) return res.status(400).json({ error: ‘E-mail ja cadastrado.’ });
 
 ```
 const salt = await bcrypt.genSalt(10);
 const hashedPassword = await bcrypt.hash(senhaRecebida, salt);
 const result = await pool.query(
-  'INSERT INTO usuarios (nome, email, senha_hash) VALUES ($1, $2, $3) RETURNING id, nome, email',
-  [nomeRecebido, email, hashedPassword]
+  'INSERT INTO usuarios (nome, email, senha_hash, password) VALUES ($1, $2, $3, $4) RETURNING id, nome, email',
+  [nomeRecebido, email, hashedPassword, hashedPassword]
 );
 
 const token = jwt.sign({ id: result.rows[0].id }, process.env.JWT_SECRET || 'secret', { expiresIn: '8h' });
@@ -89,13 +89,13 @@ const senhaRecebida = senha || password;
 try {
 const result = await pool.query(‘SELECT * FROM usuarios WHERE email = $1’, [email]);
 const user = result.rows[0];
-if (!user) return res.status(401).json({ error: ‘Credenciais inválidas’ });
+if (!user) return res.status(401).json({ error: ‘Credenciais invalidas’ });
 
 ```
 const hashArmazenado = user.senha_hash || user.password;
-if (!hashArmazenado || !senhaRecebida) return res.status(401).json({ error: 'Credenciais inválidas' });
+if (!hashArmazenado || !senhaRecebida) return res.status(401).json({ error: 'Credenciais invalidas' });
 const validPassword = await bcrypt.compare(senhaRecebida, hashArmazenado);
-if (!validPassword) return res.status(401).json({ error: 'Credenciais inválidas' });
+if (!validPassword) return res.status(401).json({ error: 'Credenciais invalidas' });
 
 const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET || 'secret', { expiresIn: '8h' });
 return res.json({ token, user: { id: user.id, nome: user.nome, email: user.email } });
@@ -123,8 +123,8 @@ let user = result.rows[0];
 
 if (!user) {
   const insertResult = await pool.query(
-    'INSERT INTO usuarios (nome, email, google_id) VALUES ($1, $2, $3) RETURNING id, nome, email',
-    [name, email, googleId]
+    'INSERT INTO usuarios (nome, email, google_id, password, senha_hash) VALUES ($1, $2, $3, $4, $5) RETURNING id, nome, email',
+    [name, email, googleId, '', '']
   );
   user = insertResult.rows[0];
 }
@@ -135,12 +135,13 @@ res.json({ token, user: { id: user.id, nome: user.nome, email: user.email } });
 
 } catch (error) {
 console.error(‘Erro Google auth:’, error);
-res.status(401).json({ error: ‘Falha na autenticação com o Google.’ });
+res.status(401).json({ error: ‘Falha na autenticacao com o Google.’ });
 }
 });
 
-// ─── CRUD DE USUÁRIOS ─────────────────────────────────────────────────────────
+// — CRUD DE USUARIOS —
 
+// GET /api/usuarios
 app.get(’/api/usuarios’, autenticar, apenasAdmin, async (req, res) => {
 try {
 const empresaRes = await pool.query(
@@ -158,6 +159,7 @@ const result = await pool.query(
      u.id, u.nome, u.email,
      u.ativo AS usuario_ativo,
      u.data_cadastro,
+     u.created_at,
      u.google_id, u.avatar_url,
      eu.papel,
      eu.ativo AS vinculo_ativo
@@ -171,18 +173,19 @@ res.json({ usuarios: result.rows, empresaId });
 ```
 
 } catch (err) {
-console.error(‘Erro ao listar usuários:’, err.message);
-res.status(500).json({ error: ‘Erro ao buscar usuários.’, detalhe: err.message });
+console.error(‘Erro ao listar usuarios:’, err.message);
+res.status(500).json({ error: ‘Erro ao buscar usuarios.’, detalhe: err.message });
 }
 });
 
+// GET /api/usuarios/me/perfil
 app.get(’/api/usuarios/me/perfil’, autenticar, async (req, res) => {
 try {
 const result = await pool.query(
 `SELECT u.id, u.nome, u.email, u.ativo, u.created_at, eu.papel, eu.empresa_id, e.nome_fantasia, e.razao_social FROM usuarios u LEFT JOIN empresa_usuarios eu ON eu.usuario_id = u.id AND eu.ativo = true LEFT JOIN empresas e ON e.id = eu.empresa_id WHERE u.id = $1 LIMIT 1`,
 [req.userId]
 );
-if (result.rows.length === 0) return res.status(404).json({ error: ‘Usuário não encontrado.’ });
+if (result.rows.length === 0) return res.status(404).json({ error: ‘Usuario nao encontrado.’ });
 res.json(result.rows[0]);
 } catch (err) {
 console.error(‘Erro ao buscar perfil:’, err);
@@ -190,6 +193,7 @@ res.status(500).json({ error: ‘Erro ao buscar perfil.’ });
 }
 });
 
+// GET /api/usuarios/:id
 app.get(’/api/usuarios/:id’, autenticar, apenasAdmin, async (req, res) => {
 const { id } = req.params;
 try {
@@ -217,7 +221,7 @@ const result = await pool.query(
    WHERE eu.empresa_id = $1 AND u.id = $2`,
   [empresaId, id]
 );
-if (result.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado.' });
+if (result.rows.length === 0) return res.status(404).json({ error: 'Usuario nao encontrado.' });
 
 const usuario = result.rows[0];
 const unidadesRes = await pool.query(
@@ -232,20 +236,21 @@ res.json(usuario);
 ```
 
 } catch (err) {
-console.error(‘Erro ao buscar usuário:’, err);
-res.status(500).json({ error: ‘Erro ao buscar usuário.’ });
+console.error(‘Erro ao buscar usuario:’, err);
+res.status(500).json({ error: ‘Erro ao buscar usuario.’ });
 }
 });
 
+// POST /api/usuarios
 app.post(’/api/usuarios’, autenticar, apenasAdmin, async (req, res) => {
 const { nome, email, senha, papel } = req.body;
 
 if (!nome || !email || !senha || !papel) {
-return res.status(400).json({ error: ‘Campos obrigatórios: nome, email, senha, papel.’ });
+return res.status(400).json({ error: ‘Campos obrigatorios: nome, email, senha, papel.’ });
 }
 const papeisValidos = [‘ADMIN’, ‘DESIGNADO_CONFIGURADOR’, ‘DESIGNADO_LANCADOR’];
 if (!papeisValidos.includes(papel)) {
-return res.status(400).json({ error: `Papel inválido. Use: ${papeisValidos.join(', ')}` });
+return res.status(400).json({ error: ‘Papel invalido. Use: ’ + papeisValidos.join(’, ’) });
 }
 
 const client = await pool.connect();
@@ -263,11 +268,12 @@ const empresaId = empresaRes.rows[0].empresa_id;
 const emailCheck = await client.query('SELECT id FROM usuarios WHERE email = $1', [email]);
 if (emailCheck.rows.length > 0) {
   await client.query('ROLLBACK');
-  return res.status(400).json({ error: 'E-mail já cadastrado no sistema.' });
+  return res.status(400).json({ error: 'E-mail ja cadastrado no sistema.' });
 }
 
 const salt = await bcrypt.genSalt(10);
 const senhaHash = await bcrypt.hash(senha, salt);
+
 const novoUser = await client.query(
   `INSERT INTO usuarios (nome, email, senha_hash, password, ativo)
    VALUES ($1, $2, $3, $4, true)
@@ -287,13 +293,14 @@ res.status(201).json({ ...novoUser.rows[0], papel });
 
 } catch (err) {
 await client.query(‘ROLLBACK’);
-console.error(‘Erro ao criar usuário:’, err);
-res.status(500).json({ error: err.message || ‘Erro ao criar usuário.’ });
+console.error(‘Erro ao criar usuario:’, err);
+res.status(500).json({ error: err.message || ‘Erro ao criar usuario.’ });
 } finally {
 client.release();
 }
 });
 
+// PUT /api/usuarios/:id
 app.put(’/api/usuarios/:id’, autenticar, apenasAdmin, async (req, res) => {
 const { id } = req.params;
 const { nome, email, papel, ativo, novaSenha } = req.body;
@@ -318,20 +325,22 @@ const pertenceCheck = await client.query(
 );
 if (pertenceCheck.rows.length === 0) {
   await client.query('ROLLBACK');
-  return res.status(404).json({ error: 'Usuário não encontrado nesta empresa.' });
+  return res.status(404).json({ error: 'Usuario nao encontrado nesta empresa.' });
 }
 
 const campos = [];
 const valores = [];
 let idx = 1;
 
-if (nome)   { campos.push(`nome = $${idx++}`);  valores.push(nome); }
-if (email)  { campos.push(`email = $${idx++}`); valores.push(email); }
+if (nome) { campos.push(`nome = $${idx++}`); valores.push(nome); }
+if (email) { campos.push(`email = $${idx++}`); valores.push(email); }
 if (typeof ativo === 'boolean') { campos.push(`ativo = $${idx++}`); valores.push(ativo); }
 if (novaSenha) {
   const salt = await bcrypt.genSalt(10);
   const hash = await bcrypt.hash(novaSenha, salt);
   campos.push(`senha_hash = $${idx++}`);
+  valores.push(hash);
+  campos.push(`password = $${idx++}`);
   valores.push(hash);
 }
 
@@ -345,7 +354,7 @@ if (campos.length > 0) {
 
 if (papel) {
   const papeisValidos = ['ADMIN', 'DESIGNADO_CONFIGURADOR', 'DESIGNADO_LANCADOR'];
-  if (!papeisValidos.includes(papel)) throw new Error('Papel inválido.');
+  if (!papeisValidos.includes(papel)) throw new Error('Papel invalido.');
   await client.query(
     `UPDATE empresa_usuarios SET papel = $1 WHERE empresa_id = $2 AND usuario_id = $3`,
     [papel, empresaId, id]
@@ -366,18 +375,19 @@ res.json(updated.rows[0]);
 
 } catch (err) {
 await client.query(‘ROLLBACK’);
-console.error(‘Erro ao atualizar usuário:’, err);
-res.status(500).json({ error: err.message || ‘Erro ao atualizar usuário.’ });
+console.error(‘Erro ao atualizar usuario:’, err);
+res.status(500).json({ error: err.message || ‘Erro ao atualizar usuario.’ });
 } finally {
 client.release();
 }
 });
 
+// DELETE /api/usuarios/:id
 app.delete(’/api/usuarios/:id’, autenticar, apenasAdmin, async (req, res) => {
 const { id } = req.params;
 
 if (parseInt(id) === req.userId) {
-return res.status(400).json({ error: ‘Você não pode excluir seu próprio usuário.’ });
+return res.status(400).json({ error: ‘Voce nao pode excluir seu proprio usuario.’ });
 }
 
 const client = await pool.connect();
@@ -400,19 +410,19 @@ const result = await client.query(
 );
 if (result.rows.length === 0) {
   await client.query('ROLLBACK');
-  return res.status(404).json({ error: 'Usuário não encontrado nesta empresa.' });
+  return res.status(404).json({ error: 'Usuario nao encontrado nesta empresa.' });
 }
 
 await client.query(`UPDATE usuarios SET ativo = false WHERE id = $1`, [id]);
 
 await client.query('COMMIT');
-res.json({ mensagem: 'Usuário desativado com sucesso.', id: parseInt(id) });
+res.json({ mensagem: 'Usuario desativado com sucesso.', id: parseInt(id) });
 ```
 
 } catch (err) {
 await client.query(‘ROLLBACK’);
-console.error(‘Erro ao excluir usuário:’, err);
-res.status(500).json({ error: err.message || ‘Erro ao excluir usuário.’ });
+console.error(‘Erro ao excluir usuario:’, err);
+res.status(500).json({ error: err.message || ‘Erro ao excluir usuario.’ });
 } finally {
 client.release();
 }
