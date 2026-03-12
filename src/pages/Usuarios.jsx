@@ -693,7 +693,7 @@ function BtnAcao({ icon, title, cor, onClick }) {
   );
 }
 
-function TabelaUsuarios({ usuarios, onEditar, onExcluir, onVerDetalhes, busca }) {
+function TabelaUsuarios({ usuarios, onEditar, onExcluir, onVerDetalhes, busca, acao }) {
   const filtrados = usuarios.filter(u =>
     `${u.nome} ${u.email} ${u.papel}`.toLowerCase().includes(busca.toLowerCase())
   );
@@ -730,11 +730,12 @@ function TabelaUsuarios({ usuarios, onEditar, onExcluir, onVerDetalhes, busca })
               onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? T.surface : T.bgAlt}
             >
               <td style={{ padding: '11px 14px', fontFamily: T.fontBody, fontSize: 13, color: T.text, fontWeight: 600 }}>
-                <button onClick={() => onVerDetalhes && onVerDetalhes(u)} style={{
+                <button onClick={() => acao === 'excluir' ? onExcluir(u) : (onVerDetalhes && onVerDetalhes(u))} style={{
                   background: 'none', border: 'none', cursor: 'pointer',
-                  color: T.navy, fontWeight: 600, fontSize: 13,
+                  color: acao === 'excluir' ? T.red : T.navy, fontWeight: 600, fontSize: 13,
                   fontFamily: T.fontBody, padding: 0,
-                  textDecoration: 'underline dotted', textDecorationColor: T.border,
+                  textDecoration: 'underline dotted',
+                  textDecorationColor: acao === 'excluir' ? T.red : T.border,
                 }}>{u.nome}</button>
               </td>
               <td style={{ padding: '11px 14px', fontFamily: T.fontBody, fontSize: 13, color: T.textMd }}>{u.email}</td>
@@ -953,6 +954,7 @@ export default function Usuarios() {
           <TabelaUsuarios
             usuarios={usuarios}
             busca={busca}
+            acao={acao}
             onEditar={handleEditarDaTabela}
             onExcluir={u => setUsuarioExcluindo(u)}
             onVerDetalhes={handleVerDetalhes}
