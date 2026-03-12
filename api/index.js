@@ -16,7 +16,7 @@ ssl: { rejectUnauthorized: false }
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// — Middleware de autenticacao JWT —
+
 function autenticar(req, res, next) {
 const authHeader = req.headers.authorization;
 if (!authHeader || !authHeader.startsWith(’Bearer ‘)) {
@@ -32,7 +32,7 @@ return res.status(401).json({ error: ‘Token invalido ou expirado.’ });
 }
 }
 
-// — Middleware de permissao ADMIN —
+
 async function apenasAdmin(req, res, next) {
 try {
 const result = await pool.query(
@@ -48,12 +48,12 @@ res.status(500).json({ error: ‘Erro ao verificar permissoes.’ });
 }
 }
 
-// — Rota de Teste —
+
 app.get(’/api/health’, (req, res) => {
 res.json({ status: ‘MetasPro API esta operando’ });
 });
 
-// — AUTENTICACAO —
+
 
 // Registro de Usuario
 app.post(’/api/auth/register’, async (req, res) => {
@@ -137,7 +137,6 @@ res.status(401).json({ error: ‘Falha na autenticacao com o Google.’ });
 }
 });
 
-// — CRUD DE USUARIOS —
 
 // GET /api/usuarios
 app.get(’/api/usuarios’, autenticar, apenasAdmin, async (req, res) => {
