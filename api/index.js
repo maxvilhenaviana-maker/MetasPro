@@ -368,10 +368,11 @@ app.post('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
   }
 });
 
-// PUT /api/usuarios/:id — atualiza dados e/ou papel do usuário
+// PUT /api/usuarios/:id — atualiza dados, papel e unidades do usuário
 app.put('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
   const { id } = req.params;
-  const { nome, email, papel, ativo, novaSenha } = req.body;
+  const { nome, email, papel, ativo, novaSenha, unidades } = req.body;
+  // unidades: array de UUIDs das unidades selecionadas (se presente, substitui as atuais)
 
   const client = await pool.connect();
   try {
@@ -426,6 +427,38 @@ app.put('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
         `UPDATE empresa_usuarios SET papel = $1 WHERE empresa_id = $2 AND usuario_id = $3`,
         [papel, empresaId, id]
       );
+    }
+
+    // Sincroniza unidades: se o array foi enviado, substitui os vínculos atuais
+    if (Array.isArray(unidades)) {
+      // Descobre a empresa do usuário para validar as unidades
+      const empresaUsuarioRes = await client.query(
+        `SELECT empresa_id FROM empresa_usuarios WHERE usuario_id = $1 AND ativo = true LIMIT 1`,
+        [id]
+      );
+      const empresaUsuarioId = empresaUsuarioRes.rows[0]?.empresa_id || empresaId;
+
+      // Desativa todos os vínculos atuais
+      await client.query(
+        `UPDATE usuario_unidades SET ativo = false WHERE usuario_id = $1`,
+        [id]
+      );
+
+      // Reativa ou insere os vínculos selecionados
+      for (const unidade_id of unidades) {
+        const unidadeCheck = await client.query(
+          `SELECT id FROM unidades_monitoradas WHERE id = $1 AND empresa_id = $2 AND ativo = true`,
+          [unidade_id, empresaUsuarioId]
+        );
+        if (unidadeCheck.rows.length > 0) {
+          await client.query(
+            `INSERT INTO usuario_unidades (usuario_id, unidade_id, ativo)
+             VALUES ($1, $2, true)
+             ON CONFLICT (usuario_id, unidade_id) DO UPDATE SET ativo = true`,
+            [id, unidade_id]
+          );
+        }
+      }
     }
 
     await client.query('COMMIT');
