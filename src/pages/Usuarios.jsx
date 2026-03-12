@@ -1,10 +1,9 @@
 // src/pages/Usuarios.jsx
 // Módulo completo de Gestão de Usuários — MetasPro
-// Ações: Consultar, Incluir, Alterar, Excluir
-// Acessa: GET/POST/PUT/DELETE /api/usuarios (ADMIN only)
+// Ações: Consultar, Incluir (com empresa + unidades), Alterar, Excluir
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import NavbarMetasPro from '../components/NavbarMetasPro';
 import { T } from '../theme';
 import api from '../services/api';
@@ -62,7 +61,7 @@ const Spinner = () => (
 );
 
 // ─── Campo de Formulário ──────────────────────────────────────────────────────
-function Campo({ label, required, children }) {
+function Campo({ label, required, children, dica }) {
   return (
     <div style={{ marginBottom: 16 }}>
       <label style={{
@@ -73,6 +72,11 @@ function Campo({ label, required, children }) {
         {label}{required && <span style={{ color: T.red }}> *</span>}
       </label>
       {children}
+      {dica && (
+        <span style={{ fontSize: 11, color: T.textDim, marginTop: 3, display: 'block' }}>
+          {dica}
+        </span>
+      )}
     </div>
   );
 }
@@ -84,6 +88,7 @@ const inputStyle = (focus) => ({
   fontSize: 13, fontFamily: T.fontBody,
   color: T.text, background: T.surface,
   outline: 'none', transition: T.transition,
+  boxSizing: 'border-box',
 });
 
 function Input({ value, onChange, type = 'text', placeholder, required, disabled }) {
@@ -103,7 +108,7 @@ function Input({ value, onChange, type = 'text', placeholder, required, disabled
   );
 }
 
-function Select({ value, onChange, children, disabled }) {
+function SelectField({ value, onChange, children, disabled }) {
   const [focus, setFocus] = useState(false);
   return (
     <select
@@ -112,7 +117,7 @@ function Select({ value, onChange, children, disabled }) {
       disabled={disabled}
       onFocus={() => setFocus(true)}
       onBlur={() => setFocus(false)}
-      style={{ ...inputStyle(focus), cursor: 'pointer', opacity: disabled ? 0.6 : 1 }}
+      style={{ ...inputStyle(focus), cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1 }}
     >
       {children}
     </select>
@@ -122,7 +127,7 @@ function Select({ value, onChange, children, disabled }) {
 // ─── Toast de feedback ────────────────────────────────────────────────────────
 function Toast({ msg, tipo, onClose }) {
   useEffect(() => {
-    const t = setTimeout(onClose, 3500);
+    const t = setTimeout(onClose, 4000);
     return () => clearTimeout(t);
   }, [onClose]);
 
@@ -147,7 +152,7 @@ function Toast({ msg, tipo, onClose }) {
   );
 }
 
-// ─── Modal de Detalhes do Usuário ────────────────────────────────────────────
+// ─── Modal de Detalhes do Usuário ─────────────────────────────────────────────
 function ModalDetalhes({ usuario, onFechar, onEditar, carregando }) {
   if (!usuario) return null;
   const campos = [
@@ -166,11 +171,12 @@ function ModalDetalhes({ usuario, onFechar, onEditar, carregando }) {
               {usuario.unidades.map(u => (
                 <span key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
                   <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />
-                  {u.nome_unidade} <span style={{ color: '#94a3b8', fontSize: 11 }}>({u.codigo_unidade})</span>
+                  {u.nome_unidade}
+                  {u.codigo_unidade && <span style={{ color: '#94a3b8', fontSize: 11 }}>({u.codigo_unidade})</span>}
                 </span>
               ))}
             </div>
-          : '— Nenhuma unidade cadastrada'
+          : <span style={{ fontSize: 12, color: '#94a3b8' }}>Nenhuma unidade vinculada</span>
     },
     { label: 'Cadastro',     valor: usuario.data_cadastro ? new Date(usuario.data_cadastro).toLocaleString('pt-BR') : '—' },
     { label: 'Login Google', valor: usuario.google_id ? '✅ Vinculado' : '— Não vinculado' },
@@ -179,7 +185,7 @@ function ModalDetalhes({ usuario, onFechar, onEditar, carregando }) {
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(15,45,82,0.5)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 1000, animation: 'fadeIn 0.2s ease', padding: '16px',
+      zIndex: 1000, animation: 'fadeIn 0.2s ease', padding: 16,
     }}>
       <div style={{
         background: '#fff', borderRadius: 16,
@@ -191,19 +197,14 @@ function ModalDetalhes({ usuario, onFechar, onEditar, carregando }) {
           <h3 style={{ fontFamily: "'Sora', sans-serif", fontWeight: 700, fontSize: 18, color: '#0f2d52', margin: 0 }}>
             👤 Detalhes do Usuário
           </h3>
-          <button onClick={onFechar} style={{
-            background: 'none', border: 'none', fontSize: 20,
-            cursor: 'pointer', color: '#94a3b8', lineHeight: 1,
-          }}>×</button>
+          <button onClick={onFechar} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#94a3b8', lineHeight: 1 }}>×</button>
         </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24, overflowY: 'auto', flexGrow: 1 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24, overflowY: 'auto', flexGrow: 1 }}>
           {campos.map(({ label, valor }) => (
             <div key={label} style={{
               display: 'flex', flexDirection: 'column', gap: 3,
-              padding: '10px 14px',
-              background: '#f8fafc', borderRadius: 8,
-              border: '1px solid #e2e8f0',
+              padding: '9px 12px', background: '#f8fafc',
+              borderRadius: 8, border: '1px solid #e2e8f0',
             }}>
               <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {label}
@@ -214,25 +215,17 @@ function ModalDetalhes({ usuario, onFechar, onEditar, carregando }) {
             </div>
           ))}
         </div>
-
         <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
           <button onClick={onFechar} style={{
-            flex: 1, padding: '10px 0',
-            background: '#f8fafc', border: '1.5px solid #e2e8f0',
-            borderRadius: 8, color: '#64748b', fontSize: 13,
-            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-          }}>
-            Fechar
-          </button>
+            flex: 1, padding: '10px 0', background: '#f8fafc',
+            border: '1.5px solid #e2e8f0', borderRadius: 8,
+            color: '#64748b', fontSize: 13, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+          }}>Fechar</button>
           <button onClick={() => { onFechar(); onEditar(usuario); }} style={{
-            flex: 2, padding: '10px 0',
-            background: '#0f2d52', border: 'none',
-            borderRadius: 8, color: '#fff', fontSize: 13,
-            fontWeight: 600, cursor: 'pointer',
-            fontFamily: "'DM Sans', sans-serif",
-          }}>
-            ✏️ Editar este usuário
-          </button>
+            flex: 2, padding: '10px 0', background: '#0f2d52',
+            border: 'none', borderRadius: 8, color: '#fff',
+            fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+          }}>✏️ Editar este usuário</button>
         </div>
       </div>
     </div>
@@ -253,9 +246,7 @@ function ModalConfirmar({ usuario, onConfirmar, onCancelar, loading }) {
         boxShadow: T.shadowLg, textAlign: 'center',
       }}>
         <div style={{ fontSize: 48, marginBottom: 12 }}>🗑️</div>
-        <h3 style={{ fontFamily: T.fontDisplay, color: T.text, marginBottom: 8 }}>
-          Excluir Usuário
-        </h3>
+        <h3 style={{ fontFamily: T.fontDisplay, color: T.text, marginBottom: 8 }}>Excluir Usuário</h3>
         <p style={{ color: T.textMd, fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>
           Deseja desativar o usuário <strong>{usuario?.nome}</strong>?<br />
           <span style={{ fontSize: 12, color: T.textDim }}>
@@ -263,30 +254,19 @@ function ModalConfirmar({ usuario, onConfirmar, onCancelar, loading }) {
           </span>
         </p>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-          <button
-            onClick={onCancelar}
-            disabled={loading}
-            style={{
-              padding: '9px 20px', background: T.surface,
-              border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
-              color: T.textMd, fontSize: 13, cursor: 'pointer',
-              fontFamily: T.fontBody,
-            }}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirmar}
-            disabled={loading}
-            style={{
-              padding: '9px 20px', background: T.red,
-              border: 'none', borderRadius: T.radiusSm,
-              color: '#fff', fontSize: 13, cursor: 'pointer',
-              fontFamily: T.fontBody, fontWeight: 600,
-              display: 'flex', alignItems: 'center', gap: 8,
-              opacity: loading ? 0.7 : 1,
-            }}
-          >
+          <button onClick={onCancelar} disabled={loading} style={{
+            padding: '9px 20px', background: T.surface,
+            border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
+            color: T.textMd, fontSize: 13, cursor: 'pointer', fontFamily: T.fontBody,
+          }}>Cancelar</button>
+          <button onClick={onConfirmar} disabled={loading} style={{
+            padding: '9px 20px', background: T.red,
+            border: 'none', borderRadius: T.radiusSm,
+            color: '#fff', fontSize: 13, cursor: 'pointer',
+            fontFamily: T.fontBody, fontWeight: 600,
+            display: 'flex', alignItems: 'center', gap: 8,
+            opacity: loading ? 0.7 : 1,
+          }}>
             {loading ? <Spinner /> : '🗑️'} Confirmar Exclusão
           </button>
         </div>
@@ -295,29 +275,267 @@ function ModalConfirmar({ usuario, onConfirmar, onCancelar, loading }) {
   );
 }
 
-// ─── Formulário Incluir / Alterar ─────────────────────────────────────────────
-function FormularioUsuario({ modo, usuarioInicial, onSalvar, onCancelar, loading }) {
+// ─── Seletor de Unidades (checkboxes) ─────────────────────────────────────────
+function SeletorUnidades({ unidades, selecionadas, onChange, carregando }) {
+  if (carregando) {
+    return (
+      <div style={{ padding: '12px 0', display: 'flex', alignItems: 'center', gap: 8, color: T.textDim, fontSize: 13 }}>
+        <Spinner /> Carregando unidades...
+      </div>
+    );
+  }
+  if (unidades.length === 0) {
+    return (
+      <div style={{
+        padding: '10px 14px', background: '#f8fafc',
+        borderRadius: T.radiusSm, border: `1px solid ${T.border}`,
+        fontSize: 13, color: T.textDim, fontFamily: T.fontBody,
+      }}>
+        Nenhuma unidade ativa encontrada para esta empresa.
+      </div>
+    );
+  }
+  return (
+    <div style={{
+      border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
+      overflow: 'hidden',
+    }}>
+      {unidades.map((u, i) => {
+        const marcada = selecionadas.includes(u.id);
+        return (
+          <label key={u.id} style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '9px 14px', cursor: 'pointer',
+            background: marcada ? '#eff6ff' : (i % 2 === 0 ? T.surface : T.bgAlt),
+            borderBottom: i < unidades.length - 1 ? `1px solid ${T.border}` : 'none',
+            transition: T.transition,
+          }}>
+            <input
+              type="checkbox"
+              checked={marcada}
+              onChange={() => {
+                if (marcada) {
+                  onChange(selecionadas.filter(id => id !== u.id));
+                } else {
+                  onChange([...selecionadas, u.id]);
+                }
+              }}
+              style={{ width: 15, height: 15, accentColor: T.navy, cursor: 'pointer' }}
+            />
+            <span style={{ fontSize: 13, color: T.text, fontFamily: T.fontBody, fontWeight: marcada ? 600 : 400 }}>
+              {u.nome_unidade}
+            </span>
+            {u.codigo_unidade && (
+              <span style={{ fontSize: 11, color: T.textDim, marginLeft: 'auto' }}>
+                {u.codigo_unidade}
+              </span>
+            )}
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Formulário Incluir ───────────────────────────────────────────────────────
+function FormularioIncluir({ onSalvar, onCancelar, loading }) {
   const [form, setForm] = useState({
-    nome: usuarioInicial?.nome || '',
-    email: usuarioInicial?.email || '',
+    nome: '',
+    email: '',
     senha: '',
     confirmarSenha: '',
-    papel: usuarioInicial?.papel || 'DESIGNADO_LANCADOR',
-    ativo: usuarioInicial?.ativo !== false,
+    papel: 'DESIGNADO_LANCADOR',
+    empresa_id: '',
+  });
+  const [unidadesSelecionadas, setUnidadesSelecionadas] = useState([]);
+  const [empresas, setEmpresas] = useState([]);
+  const [unidades, setUnidades] = useState([]);
+  const [carregandoEmpresas, setCarregandoEmpresas] = useState(true);
+  const [carregandoUnidades, setCarregandoUnidades] = useState(false);
+  const [erros, setErros] = useState({});
+
+  // Carrega empresas ao montar
+  useEffect(() => {
+    api.get('/opcoes/empresas')
+      .then(({ data }) => setEmpresas(data.empresas || []))
+      .catch(() => setEmpresas([]))
+      .finally(() => setCarregandoEmpresas(false));
+  }, []);
+
+  // Carrega unidades quando a empresa muda
+  useEffect(() => {
+    if (!form.empresa_id) {
+      setUnidades([]);
+      setUnidadesSelecionadas([]);
+      return;
+    }
+    setCarregandoUnidades(true);
+    setUnidadesSelecionadas([]);
+    api.get(`/opcoes/unidades?empresa_id=${form.empresa_id}`)
+      .then(({ data }) => setUnidades(data.unidades || []))
+      .catch(() => setUnidades([]))
+      .finally(() => setCarregandoUnidades(false));
+  }, [form.empresa_id]);
+
+  const set = (campo) => (e) => {
+    setForm(f => ({ ...f, [campo]: e.target.value }));
+    setErros(e => ({ ...e, [campo]: undefined }));
+  };
+
+  const validar = () => {
+    const e = {};
+    if (!form.nome.trim())  e.nome  = 'Nome obrigatório.';
+    if (!form.email.trim()) e.email = 'E-mail obrigatório.';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'E-mail inválido.';
+    if (!form.senha)        e.senha = 'Senha obrigatória.';
+    else if (form.senha.length < 6) e.senha = 'Mínimo 6 caracteres.';
+    if (form.senha && form.senha !== form.confirmarSenha) e.confirmarSenha = 'Senhas não coincidem.';
+    if (!form.empresa_id)   e.empresa_id = 'Selecione uma empresa.';
+    return e;
+  };
+
+  const handleSubmit = () => {
+    const e = validar();
+    if (Object.keys(e).length > 0) { setErros(e); return; }
+    onSalvar({
+      nome:       form.nome.trim(),
+      email:      form.email.trim(),
+      senha:      form.senha,
+      papel:      form.papel,
+      empresa_id: form.empresa_id,
+      unidades:   unidadesSelecionadas,
+    });
+  };
+
+  const ErrMsg = ({ campo }) => erros[campo]
+    ? <span style={{ fontSize: 11, color: T.red, marginTop: 3, display: 'block' }}>{erros[campo]}</span>
+    : null;
+
+  return (
+    <div style={{
+      background: T.surface, borderRadius: T.radiusLg,
+      border: `1px solid ${T.border}`, boxShadow: T.shadow,
+      padding: 28, maxWidth: 560,
+    }}>
+      <h3 style={{
+        fontFamily: T.fontDisplay, fontWeight: 700,
+        fontSize: 18, color: T.text, marginBottom: 24,
+        display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        ➕ Novo Usuário
+      </h3>
+
+      <Campo label="Nome completo" required>
+        <Input value={form.nome} onChange={set('nome')} placeholder="Ex: João Silva" />
+        <ErrMsg campo="nome" />
+      </Campo>
+
+      <Campo label="E-mail" required>
+        <Input value={form.email} onChange={set('email')} type="email" placeholder="usuario@empresa.com" />
+        <ErrMsg campo="email" />
+      </Campo>
+
+      <Campo label="Senha" required>
+        <Input value={form.senha} onChange={set('senha')} type="password" placeholder="Mínimo 6 caracteres" />
+        <ErrMsg campo="senha" />
+      </Campo>
+
+      <Campo label="Confirmar senha" required>
+        <Input value={form.confirmarSenha} onChange={set('confirmarSenha')} type="password" placeholder="Repita a senha" />
+        <ErrMsg campo="confirmarSenha" />
+      </Campo>
+
+      <Campo label="Papel / Permissão" required>
+        <SelectField value={form.papel} onChange={set('papel')}>
+          {PAPEIS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+        </SelectField>
+      </Campo>
+
+      {/* ── Empresa ── */}
+      <Campo label="Empresa" required dica="A empresa à qual este usuário será vinculado.">
+        {carregandoEmpresas ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 0', color: T.textDim, fontSize: 13 }}>
+            <Spinner /> Carregando empresas...
+          </div>
+        ) : (
+          <SelectField
+            value={form.empresa_id}
+            onChange={e => {
+              setForm(f => ({ ...f, empresa_id: e.target.value }));
+              setErros(err => ({ ...err, empresa_id: undefined }));
+            }}
+          >
+            <option value="">— Selecione uma empresa —</option>
+            {empresas.map(e => (
+              <option key={e.id} value={e.id}>
+                {e.nome_fantasia || e.razao_social}
+                {e.cnpj ? ` (${e.cnpj})` : ''}
+              </option>
+            ))}
+          </SelectField>
+        )}
+        <ErrMsg campo="empresa_id" />
+      </Campo>
+
+      {/* ── Unidades ── */}
+      {form.empresa_id && (
+        <Campo
+          label="Unidades de Monitoramento"
+          dica="Marque as unidades que este usuário poderá acessar. Opcional."
+        >
+          <SeletorUnidades
+            unidades={unidades}
+            selecionadas={unidadesSelecionadas}
+            onChange={setUnidadesSelecionadas}
+            carregando={carregandoUnidades}
+          />
+        </Campo>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+        <button onClick={onCancelar} disabled={loading} style={{
+          flex: 1, padding: '10px 0',
+          background: T.surface, border: `1.5px solid ${T.border}`,
+          borderRadius: T.radiusSm, color: T.textMd,
+          fontSize: 13, cursor: 'pointer', fontFamily: T.fontBody,
+        }}>Cancelar</button>
+        <button onClick={handleSubmit} disabled={loading} style={{
+          flex: 2, padding: '10px 0',
+          background: T.navy, border: 'none',
+          borderRadius: T.radiusSm, color: '#fff',
+          fontSize: 13, fontWeight: 600, cursor: 'pointer',
+          fontFamily: T.fontBody,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          opacity: loading ? 0.7 : 1,
+        }}>
+          {loading ? <Spinner /> : '➕ Incluir Usuário'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Formulário Alterar ───────────────────────────────────────────────────────
+function FormularioAlterar({ usuarioInicial, onSalvar, onCancelar, loading }) {
+  const [form, setForm] = useState({
+    nome:           usuarioInicial?.nome  || '',
+    email:          usuarioInicial?.email || '',
+    senha:          '',
+    confirmarSenha: '',
+    papel:          usuarioInicial?.papel || 'DESIGNADO_LANCADOR',
+    ativo:          usuarioInicial?.ativo !== false,
   });
   const [erros, setErros] = useState({});
 
-  const set = (campo) => (e) => setForm(f => ({ ...f, [campo]: e.target.value }));
+  const set = (campo) => (e) => {
+    setForm(f => ({ ...f, [campo]: e.target.value }));
+    setErros(err => ({ ...err, [campo]: undefined }));
+  };
 
   const validar = () => {
     const e = {};
     if (!form.nome.trim()) e.nome = 'Nome obrigatório.';
-    if (!form.email.trim()) e.email = 'E-mail obrigatório.';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'E-mail inválido.';
-    if (modo === 'incluir') {
-      if (!form.senha) e.senha = 'Senha obrigatória.';
-      else if (form.senha.length < 6) e.senha = 'Mínimo 6 caracteres.';
-    }
+    if (form.senha && form.senha.length < 6) e.senha = 'Mínimo 6 caracteres.';
     if (form.senha && form.senha !== form.confirmarSenha) e.confirmarSenha = 'Senhas não coincidem.';
     return e;
   };
@@ -325,17 +543,8 @@ function FormularioUsuario({ modo, usuarioInicial, onSalvar, onCancelar, loading
   const handleSubmit = () => {
     const e = validar();
     if (Object.keys(e).length > 0) { setErros(e); return; }
-
-    const payload = {
-      nome: form.nome.trim(),
-      email: form.email.trim(),
-      papel: form.papel,
-    };
-    if (modo === 'incluir') payload.senha = form.senha;
-    if (modo === 'alterar') {
-      payload.ativo = form.ativo;
-      if (form.senha) payload.novaSenha = form.senha;
-    }
+    const payload = { nome: form.nome.trim(), papel: form.papel, ativo: form.ativo };
+    if (form.senha) payload.novaSenha = form.senha;
     onSalvar(payload);
   };
 
@@ -354,7 +563,7 @@ function FormularioUsuario({ modo, usuarioInicial, onSalvar, onCancelar, loading
         fontSize: 18, color: T.text, marginBottom: 24,
         display: 'flex', alignItems: 'center', gap: 8,
       }}>
-        {modo === 'incluir' ? '➕ Novo Usuário' : '✏️ Editar Usuário'}
+        ✏️ Editar Usuário
       </h3>
 
       <Campo label="Nome completo" required>
@@ -362,81 +571,59 @@ function FormularioUsuario({ modo, usuarioInicial, onSalvar, onCancelar, loading
         <ErrMsg campo="nome" />
       </Campo>
 
-      <Campo label="E-mail" required>
-        <Input value={form.email} onChange={set('email')} type="email"
-          placeholder="usuario@empresa.com"
-          disabled={modo === 'alterar'}
-        />
-        <ErrMsg campo="email" />
+      <Campo label="E-mail">
+        <Input value={form.email} disabled />
       </Campo>
 
-      <Campo label={modo === 'incluir' ? 'Senha' : 'Nova senha (opcional)'} required={modo === 'incluir'}>
+      <Campo label="Nova senha (opcional)">
         <Input value={form.senha} onChange={set('senha')} type="password"
-          placeholder={modo === 'incluir' ? 'Mínimo 6 caracteres' : 'Deixe em branco para não alterar'}
-        />
+          placeholder="Deixe em branco para não alterar" />
         <ErrMsg campo="senha" />
       </Campo>
 
-      {(modo === 'incluir' || form.senha) && (
-        <Campo label="Confirmar senha" required={modo === 'incluir'}>
+      {form.senha && (
+        <Campo label="Confirmar nova senha" required>
           <Input value={form.confirmarSenha} onChange={set('confirmarSenha')} type="password"
-            placeholder="Repita a senha"
-          />
+            placeholder="Repita a nova senha" />
           <ErrMsg campo="confirmarSenha" />
         </Campo>
       )}
 
       <Campo label="Papel / Permissão" required>
-        <Select value={form.papel} onChange={set('papel')}>
-          {PAPEIS.map(p => (
-            <option key={p.value} value={p.value}>{p.label}</option>
-          ))}
-        </Select>
+        <SelectField value={form.papel} onChange={set('papel')}>
+          {PAPEIS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+        </SelectField>
       </Campo>
 
-      {modo === 'alterar' && (
-        <Campo label="Status">
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={form.ativo}
-              onChange={(e) => setForm(f => ({ ...f, ativo: e.target.checked }))}
-              style={{ width: 16, height: 16 }}
-            />
-            <span style={{ fontSize: 13, color: T.textMd, fontFamily: T.fontBody }}>
-              Usuário ativo
-            </span>
-          </label>
-        </Campo>
-      )}
+      <Campo label="Status">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={form.ativo}
+            onChange={e => setForm(f => ({ ...f, ativo: e.target.checked }))}
+            style={{ width: 16, height: 16 }}
+          />
+          <span style={{ fontSize: 13, color: T.textMd, fontFamily: T.fontBody }}>Usuário ativo</span>
+        </label>
+      </Campo>
 
       <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-        <button
-          onClick={onCancelar}
-          disabled={loading}
-          style={{
-            flex: 1, padding: '10px 0',
-            background: T.surface, border: `1.5px solid ${T.border}`,
-            borderRadius: T.radiusSm, color: T.textMd,
-            fontSize: 13, cursor: 'pointer', fontFamily: T.fontBody,
-          }}
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={handleSubmit}
-          disabled={loading}
-          style={{
-            flex: 2, padding: '10px 0',
-            background: T.navy, border: 'none',
-            borderRadius: T.radiusSm, color: '#fff',
-            fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            fontFamily: T.fontBody,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
-          {loading ? <Spinner /> : (modo === 'incluir' ? '➕ Incluir Usuário' : '💾 Salvar Alterações')}
+        <button onClick={onCancelar} disabled={loading} style={{
+          flex: 1, padding: '10px 0',
+          background: T.surface, border: `1.5px solid ${T.border}`,
+          borderRadius: T.radiusSm, color: T.textMd,
+          fontSize: 13, cursor: 'pointer', fontFamily: T.fontBody,
+        }}>Cancelar</button>
+        <button onClick={handleSubmit} disabled={loading} style={{
+          flex: 2, padding: '10px 0',
+          background: T.navy, border: 'none',
+          borderRadius: T.radiusSm, color: '#fff',
+          fontSize: 13, fontWeight: 600, cursor: 'pointer',
+          fontFamily: T.fontBody,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          opacity: loading ? 0.7 : 1,
+        }}>
+          {loading ? <Spinner /> : '💾 Salvar Alterações'}
         </button>
       </div>
     </div>
@@ -444,20 +631,34 @@ function FormularioUsuario({ modo, usuarioInicial, onSalvar, onCancelar, loading
 }
 
 // ─── Tabela de Consulta ───────────────────────────────────────────────────────
+function BtnAcao({ icon, title, cor, onClick }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button onClick={onClick} title={title}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        padding: '5px 9px',
+        background: hover ? cor : 'transparent',
+        border: `1.5px solid ${hover ? cor : T.border}`,
+        borderRadius: T.radiusSm,
+        cursor: 'pointer', fontSize: 13,
+        transition: T.transition,
+      }}>
+      {icon}
+    </button>
+  );
+}
+
 function TabelaUsuarios({ usuarios, onEditar, onExcluir, onVerDetalhes, busca }) {
   const filtrados = usuarios.filter(u =>
-    u.nome.toLowerCase().includes(busca.toLowerCase()) ||
-    u.email.toLowerCase().includes(busca.toLowerCase()) ||
-    (PAPEL_BADGE[u.papel]?.label || u.papel || '').toLowerCase().includes(busca.toLowerCase())
+    `${u.nome} ${u.email} ${u.papel}`.toLowerCase().includes(busca.toLowerCase())
   );
 
   if (filtrados.length === 0) {
     return (
-      <div style={{
-        textAlign: 'center', padding: '48px 24px',
-        color: T.textDim, fontSize: 14, fontFamily: T.fontBody,
-      }}>
-        {busca ? `Nenhum usuário encontrado para "${busca}"` : 'Nenhum usuário cadastrado ainda.'}
+      <div style={{ padding: '32px 24px', textAlign: 'center', color: T.textDim, fontFamily: T.fontBody, fontSize: 14 }}>
+        {busca ? `Nenhum usuário encontrado para "${busca}".` : 'Nenhum usuário cadastrado.'}
       </div>
     );
   }
@@ -480,45 +681,29 @@ function TabelaUsuarios({ usuarios, onEditar, onExcluir, onVerDetalhes, busca })
         </thead>
         <tbody>
           {filtrados.map((u, i) => (
-            <tr
-              key={u.id}
-              style={{
-                background: i % 2 === 0 ? T.surface : T.bgAlt,
-                transition: T.transition,
-              }}
+            <tr key={u.id}
+              style={{ background: i % 2 === 0 ? T.surface : T.bgAlt, transition: T.transition }}
               onMouseEnter={e => e.currentTarget.style.background = T.surfaceHover}
               onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? T.surface : T.bgAlt}
             >
               <td style={{ padding: '11px 14px', fontFamily: T.fontBody, fontSize: 13, color: T.text, fontWeight: 600 }}>
-                <button
-                  onClick={() => onVerDetalhes && onVerDetalhes(u)}
-                  title="Ver detalhes"
-                  style={{
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: T.navy, fontWeight: 600, fontSize: 13,
-                    fontFamily: T.fontBody, padding: 0, textDecoration: 'underline dotted',
-                    textDecorationColor: T.border,
-                  }}
-                >
-                  {u.nome}
-                </button>
+                <button onClick={() => onVerDetalhes && onVerDetalhes(u)} style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: T.navy, fontWeight: 600, fontSize: 13,
+                  fontFamily: T.fontBody, padding: 0,
+                  textDecoration: 'underline dotted', textDecorationColor: T.border,
+                }}>{u.nome}</button>
               </td>
-              <td style={{ padding: '11px 14px', fontFamily: T.fontBody, fontSize: 13, color: T.textMd }}>
-                {u.email}
-              </td>
-              <td style={{ padding: '11px 14px' }}>
-                <Badge papel={u.papel} />
-              </td>
-              <td style={{ padding: '11px 14px' }}>
-                <StatusDot ativo={u.usuario_ativo ?? u.ativo} />
-              </td>
+              <td style={{ padding: '11px 14px', fontFamily: T.fontBody, fontSize: 13, color: T.textMd }}>{u.email}</td>
+              <td style={{ padding: '11px 14px' }}><Badge papel={u.papel} /></td>
+              <td style={{ padding: '11px 14px' }}><StatusDot ativo={u.usuario_ativo ?? u.ativo} /></td>
               <td style={{ padding: '11px 14px', fontFamily: T.fontBody, fontSize: 12, color: T.textDim, whiteSpace: 'nowrap' }}>
                 {u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '—'}
               </td>
               <td style={{ padding: '11px 14px' }}>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <BtnAcao icon="✏️" title="Alterar" cor={T.blue} onClick={() => onEditar(u)} />
-                  <BtnAcao icon="🗑️" title="Excluir" cor={T.red}  onClick={() => onExcluir(u)} />
+                  <BtnAcao icon="✏️" title="Alterar" cor={T.blue}  onClick={() => onEditar(u)} />
+                  <BtnAcao icon="🗑️" title="Excluir" cor={T.red}   onClick={() => onExcluir(u)} />
                 </div>
               </td>
             </tr>
@@ -529,44 +714,42 @@ function TabelaUsuarios({ usuarios, onEditar, onExcluir, onVerDetalhes, busca })
   );
 }
 
-function BtnAcao({ icon, title, cor, onClick }) {
-  const [hover, setHover] = useState(false);
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        padding: '5px 9px',
-        background: hover ? cor : 'transparent',
-        border: `1.5px solid ${hover ? cor : T.border}`,
-        borderRadius: T.radiusSm,
-        cursor: 'pointer', fontSize: 13,
-        transition: T.transition,
-      }}
-    >
-      {icon}
-    </button>
-  );
-}
-
 // ─── Componente Principal ─────────────────────────────────────────────────────
 export default function Usuarios() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
 
   const acao = searchParams.get('acao') || 'consultar';
-  const [usuarios, setUsuarios] = useState([]);
-  const [carregando, setCarregando] = useState(false);
-  const [salvando, setSalvando] = useState(false);
-  const [excluindo, setExcluindo] = useState(false);
-  const [busca, setBusca] = useState('');
+  const [usuarios, setUsuarios]               = useState([]);
+  const [carregando, setCarregando]           = useState(false);
+  const [salvando, setSalvando]               = useState(false);
+  const [excluindo, setExcluindo]             = useState(false);
+  const [busca, setBusca]                     = useState('');
   const [usuarioEditando, setUsuarioEditando] = useState(null);
   const [usuarioExcluindo, setUsuarioExcluindo] = useState(null);
   const [usuarioDetalhes, setUsuarioDetalhes] = useState(null);
   const [carregandoDetalhes, setCarregandoDetalhes] = useState(false);
-  const [toast, setToast] = useState(null);
+  const [toast, setToast]                     = useState(null);
+
+  const showToast = (msg, tipo = 'sucesso') => setToast({ msg, tipo });
+
+  const carregarUsuarios = useCallback(async () => {
+    setCarregando(true);
+    try {
+      const { data } = await api.get('/usuarios');
+      setUsuarios(data.usuarios || []);
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Erro ao carregar usuários.', 'erro');
+    } finally {
+      setCarregando(false);
+    }
+  }, []);
+
+  useEffect(() => { carregarUsuarios(); }, [carregarUsuarios]);
+
+  const irPara = (novaAcao, usuario = null) => {
+    setUsuarioEditando(usuario);
+    setSearchParams({ acao: novaAcao });
+  };
 
   const handleVerDetalhes = async (u) => {
     setUsuarioDetalhes(u);
@@ -581,33 +764,6 @@ export default function Usuarios() {
     }
   };
 
-  const showToast = (msg, tipo = 'sucesso') => setToast({ msg, tipo });
-
-  // Carrega lista de usuários
-  const carregarUsuarios = useCallback(async () => {
-    setCarregando(true);
-    try {
-      const { data } = await api.get('/usuarios');
-      setUsuarios(data.usuarios || []);
-    } catch (err) {
-      const msg = err.response?.data?.error || 'Erro ao carregar usuários.';
-      showToast(msg, 'erro');
-    } finally {
-      setCarregando(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    carregarUsuarios();
-  }, [carregarUsuarios]);
-
-  // Navega para ação via URL
-  const irPara = (novaAcao, usuario = null) => {
-    setUsuarioEditando(usuario);
-    setSearchParams({ acao: novaAcao });
-  };
-
-  // Inclui
   const handleIncluir = async (payload) => {
     setSalvando(true);
     try {
@@ -622,7 +778,6 @@ export default function Usuarios() {
     }
   };
 
-  // Altera
   const handleAlterar = async (payload) => {
     if (!usuarioEditando) return;
     setSalvando(true);
@@ -638,7 +793,6 @@ export default function Usuarios() {
     }
   };
 
-  // Confirma exclusão
   const handleExcluir = async () => {
     if (!usuarioExcluindo) return;
     setExcluindo(true);
@@ -654,7 +808,6 @@ export default function Usuarios() {
     }
   };
 
-  // Abre form de alteração via tabela
   const handleEditarDaTabela = (u) => {
     setUsuarioEditando(u);
     setSearchParams({ acao: 'alterar' });
@@ -664,8 +817,7 @@ export default function Usuarios() {
   const renderConteudo = () => {
     if (acao === 'incluir') {
       return (
-        <FormularioUsuario
-          modo="incluir"
+        <FormularioIncluir
           onSalvar={handleIncluir}
           onCancelar={() => irPara('consultar')}
           loading={salvando}
@@ -675,11 +827,10 @@ export default function Usuarios() {
 
     if (acao === 'alterar') {
       if (!usuarioEditando) {
-        // Modo seleção: mostra tabela para escolher quem editar
         return (
           <div>
             <p style={{
-              background: T.blueDim, border: `1px solid #bfdbfe`,
+              background: T.blueDim, border: '1px solid #bfdbfe',
               borderRadius: T.radiusSm, padding: '10px 16px',
               fontSize: 13, color: T.blue, fontFamily: T.fontBody, marginBottom: 20,
             }}>
@@ -690,8 +841,7 @@ export default function Usuarios() {
         );
       }
       return (
-        <FormularioUsuario
-          modo="alterar"
+        <FormularioAlterar
           usuarioInicial={usuarioEditando}
           onSalvar={handleAlterar}
           onCancelar={() => { setUsuarioEditando(null); irPara('consultar'); }}
@@ -704,7 +854,7 @@ export default function Usuarios() {
       return (
         <div>
           <p style={{
-            background: '#fee2e2', border: `1px solid #fca5a5`,
+            background: '#fee2e2', border: '1px solid #fca5a5',
             borderRadius: T.radiusSm, padding: '10px 16px',
             fontSize: 13, color: '#b91c1c', fontFamily: T.fontBody, marginBottom: 20,
           }}>
@@ -719,10 +869,8 @@ export default function Usuarios() {
     return <TabelaComBusca />;
   };
 
-  // Tabela com busca (reutilizável nos modos)
   const TabelaComBusca = () => (
     <div>
-      {/* Barra de busca + botão incluir */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
           <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: T.textDim }}>🔍</span>
@@ -734,21 +882,18 @@ export default function Usuarios() {
               width: '100%', padding: '8px 12px 8px 32px',
               border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
               fontSize: 13, fontFamily: T.fontBody, color: T.text,
-              background: T.surface, outline: 'none',
+              background: T.surface, outline: 'none', boxSizing: 'border-box',
             }}
           />
         </div>
         {acao === 'consultar' && (
-          <button
-            onClick={() => irPara('incluir')}
-            style={{
-              padding: '8px 18px', background: T.green,
-              border: 'none', borderRadius: T.radiusSm,
-              color: '#fff', fontSize: 13, fontWeight: 600,
-              cursor: 'pointer', fontFamily: T.fontBody,
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}
-          >
+          <button onClick={() => irPara('incluir')} style={{
+            padding: '8px 18px', background: T.green,
+            border: 'none', borderRadius: T.radiusSm,
+            color: '#fff', fontSize: 13, fontWeight: 600,
+            cursor: 'pointer', fontFamily: T.fontBody,
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
             ➕ Novo Usuário
           </button>
         )}
@@ -765,7 +910,7 @@ export default function Usuarios() {
           <TabelaUsuarios
             usuarios={usuarios}
             busca={busca}
-            onEditar={acao === 'alterar' ? handleEditarDaTabela : handleEditarDaTabela}
+            onEditar={handleEditarDaTabela}
             onExcluir={u => setUsuarioExcluindo(u)}
             onVerDetalhes={handleVerDetalhes}
           />
@@ -785,25 +930,20 @@ export default function Usuarios() {
   return (
     <>
       <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin    { to { transform: rotate(360deg); } }
+        @keyframes fadeIn  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         * { box-sizing: border-box; }
         .tabs-acoes { flex-direction: row; width: fit-content; }
-        .tab-btn { width: auto; justify-content: center; }
+        .tab-btn    { width: auto; justify-content: center; }
         @media (max-width: 480px) {
           .tabs-acoes { flex-direction: column !important; width: 100% !important; }
-          .tab-btn { width: 100% !important; justify-content: flex-start !important; }
+          .tab-btn    { width: 100% !important; justify-content: flex-start !important; }
         }
       `}</style>
 
       <NavbarMetasPro />
 
-      <div style={{
-        minHeight: 'calc(100vh - 56px)',
-        background: T.bg,
-        padding: '28px 24px',
-        fontFamily: T.fontBody,
-      }}>
+      <div style={{ minHeight: 'calc(100vh - 56px)', background: T.bg, padding: '28px 24px', fontFamily: T.fontBody }}>
         <div style={{ maxWidth: 860, margin: '0 auto' }}>
 
           {/* Cabeçalho */}
@@ -816,11 +956,11 @@ export default function Usuarios() {
               👤 Gestão de Usuários
             </h1>
             <p style={{ color: T.textMd, fontSize: 13 }}>
-              Gerencie os usuários da sua empresa — inclua, altere, consulte e desative acessos.
+              Gerencie os usuários — inclua com empresa e unidades, altere, consulte e desative acessos.
             </p>
           </div>
 
-          {/* Tabs de ação — responsivo */}
+          {/* Tabs de ação */}
           <div className="tabs-acoes" style={{
             display: 'flex', gap: 6, marginBottom: 24,
             background: T.surface, borderRadius: T.radius,
@@ -831,10 +971,7 @@ export default function Usuarios() {
               return (
                 <button
                   key={tab.key}
-                  onClick={() => {
-                    setUsuarioEditando(null);
-                    setSearchParams({ acao: tab.key });
-                  }}
+                  onClick={() => { setUsuarioEditando(null); setSearchParams({ acao: tab.key }); }}
                   className="tab-btn"
                   style={{
                     padding: '10px 16px',
@@ -859,17 +996,15 @@ export default function Usuarios() {
             {renderConteudo()}
           </div>
 
-          {/* Rodapé info */}
-          <div style={{
-            marginTop: 24, display: 'flex', gap: 16, flexWrap: 'wrap',
-          }}>
+          {/* Legenda de papéis */}
+          <div style={{ marginTop: 24, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             {PAPEIS.map(p => (
               <div key={p.value} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Badge papel={p.value} />
                 <span style={{ fontSize: 11, color: T.textDim }}>
-                  {p.value === 'ADMIN' && '— acesso total'}
+                  {p.value === 'ADMIN'                  && '— acesso total'}
                   {p.value === 'DESIGNADO_CONFIGURADOR' && '— configura metas'}
-                  {p.value === 'DESIGNADO_LANCADOR' && '— lança resultados'}
+                  {p.value === 'DESIGNADO_LANCADOR'     && '— lança resultados'}
                 </span>
               </div>
             ))}
@@ -898,9 +1033,7 @@ export default function Usuarios() {
       )}
 
       {/* Toast */}
-      {toast && (
-        <Toast msg={toast.msg} tipo={toast.tipo} onClose={() => setToast(null)} />
-      )}
+      {toast && <Toast msg={toast.msg} tipo={toast.tipo} onClose={() => setToast(null)} />}
     </>
   );
 }
