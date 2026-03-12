@@ -275,12 +275,14 @@ app.post('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
       return res.status(400).json({ error: 'E-mail já cadastrado no sistema.' });
     }
 
-    // Cria o usuário — usa as colunas reais do banco (senha_hash, ativo)
+    // Cria o usuário.
+    // A tabela possui DUAS colunas de senha: "password" (NOT NULL, legada)
+    // e "senha_hash" (atual). Ambas precisam ser preenchidas com o mesmo hash.
     const salt = await bcrypt.genSalt(10);
     const senhaHash = await bcrypt.hash(senha, salt);
     const novoUser = await client.query(
-      `INSERT INTO usuarios (nome, email, senha_hash, ativo)
-       VALUES ($1, $2, $3, true)
+      `INSERT INTO usuarios (nome, email, password, senha_hash, ativo)
+       VALUES ($1, $2, $3, $3, true)
        RETURNING id, nome, email, ativo, data_cadastro, created_at`,
       [nome, email, senhaHash]
     );
