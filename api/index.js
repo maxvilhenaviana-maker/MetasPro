@@ -57,7 +57,6 @@ app.get('/api/health', (req, res) => {
 
 // ─── AUTENTICAÇÃO ─────────────────────────────────────────────────────────────
 
-// Registro de Usuário
 app.post('/api/auth/register', async (req, res) => {
   const { name, nome, email, password, senha } = req.body;
   const nomeRecebido = nome || name;
@@ -81,7 +80,6 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// Login
 app.post('/api/auth/login', async (req, res) => {
   const { email, senha, password } = req.body;
   const senhaRecebida = senha || password;
@@ -103,7 +101,6 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Login com Google
 app.post('/api/auth/google', async (req, res) => {
   const { credential } = req.body;
   try {
@@ -129,6 +126,45 @@ app.post('/api/auth/google', async (req, res) => {
   } catch (error) {
     console.error('Erro Google auth:', error);
     res.status(401).json({ error: 'Falha na autenticação com o Google.' });
+  }
+});
+
+// ─── ROTAS DE OPÇÕES (listas para formulários) ────────────────────────────────
+
+// GET /api/opcoes/empresas — lista todas as empresas ativas (para o admin escolher)
+app.get('/api/opcoes/empresas', autenticar, apenasAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, razao_social, nome_fantasia, cnpj
+       FROM empresas
+       WHERE ativo = true
+       ORDER BY razao_social ASC`
+    );
+    res.json({ empresas: result.rows });
+  } catch (err) {
+    console.error('Erro ao listar empresas:', err.message);
+    res.status(500).json({ error: 'Erro ao buscar empresas.' });
+  }
+});
+
+// GET /api/opcoes/unidades?empresa_id=xxx — lista unidades ativas de uma empresa
+app.get('/api/opcoes/unidades', autenticar, apenasAdmin, async (req, res) => {
+  const { empresa_id } = req.query;
+  if (!empresa_id) {
+    return res.status(400).json({ error: 'Parâmetro empresa_id obrigatório.' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT id, nome_unidade, codigo_unidade
+       FROM unidades_monitoradas
+       WHERE empresa_id = $1 AND ativo = true
+       ORDER BY nome_unidade ASC`,
+      [empresa_id]
+    );
+    res.json({ unidades: result.rows });
+  } catch (err) {
+    console.error('Erro ao listar unidades:', err.message);
+    res.status(500).json({ error: 'Erro ao buscar unidades.' });
   }
 });
 
@@ -193,7 +229,7 @@ app.get('/api/usuarios/me/perfil', autenticar, async (req, res) => {
   }
 });
 
-// GET /api/usuarios/:id — detalhe de um usuário (com unidades da empresa)
+// GET /api/usuarios/:id — detalhe de um usuário com suas unidades vinculadas
 app.get('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
   const { id } = req.params;
   try {
@@ -229,14 +265,18 @@ app.get('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
     const usuario = result.rows[0];
-    const unidadesRes = await pool.query(
-      `SELECT id, nome_unidade, codigo_unidade, ativo
-       FROM unidades_monitoradas
-       WHERE empresa_id = $1 AND ativo = true
-       ORDER BY nome_unidade ASC`,
-      [usuario.empresa_id]
+
+    // Unidades que o usuário tem acesso (via usuario_unidades)
+    const unidadesVinculadas = await pool.query(
+      `SELECT um.id, um.nome_unidade, um.codigo_unidade
+       FROM usuario_unidades uu
+       INNER JOIN unidades_monitoradas um ON um.id = uu.unidade_id
+       WHERE uu.usuario_id = $1 AND uu.ativo = true
+       ORDER BY um.nome_unidade ASC`,
+      [id]
     );
-    usuario.unidades = unidadesRes.rows;
+    usuario.unidades = unidadesVinculadas.rows;
+
     res.json(usuario);
   } catch (err) {
     console.error('Erro ao buscar usuário:', err);
@@ -244,12 +284,13 @@ app.get('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
   }
 });
 
-// POST /api/usuarios — cria novo usuário e vincula à empresa do admin
+// POST /api/usuarios — cria novo usuário, vincula à empresa escolhida e às unidades selecionadas
 app.post('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
-  const { nome, email, senha, papel } = req.body;
+  const { nome, email, senha, papel, empresa_id, unidades } = req.body;
+  // unidades: array de UUIDs das unidades selecionadas (pode ser vazio)
 
-  if (!nome || !email || !senha || !papel) {
-    return res.status(400).json({ error: 'Campos obrigatórios: nome, email, senha, papel.' });
+  if (!nome || !email || !senha || !papel || !empresa_id) {
+    return res.status(400).json({ error: 'Campos obrigatórios: nome, email, senha, papel, empresa_id.' });
   }
   const papeisValidos = ['ADMIN', 'DESIGNADO_CONFIGURADOR', 'DESIGNADO_LANCADOR'];
   if (!papeisValidos.includes(papel)) {
@@ -260,14 +301,6 @@ app.post('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Descobre a empresa do admin logado
-    const empresaRes = await client.query(
-      `SELECT empresa_id FROM empresa_usuarios WHERE usuario_id = $1 AND papel = 'ADMIN' AND ativo = true LIMIT 1`,
-      [req.userId]
-    );
-    if (empresaRes.rows.length === 0) throw new Error('Sem empresa vinculada ao admin.');
-    const empresaId = empresaRes.rows[0].empresa_id;
-
     // Verifica se e-mail já existe
     const emailCheck = await client.query('SELECT id FROM usuarios WHERE email = $1', [email]);
     if (emailCheck.rows.length > 0) {
@@ -275,7 +308,17 @@ app.post('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
       return res.status(400).json({ error: 'E-mail já cadastrado no sistema.' });
     }
 
-    // Cria o usuário.
+    // Verifica se a empresa_id recebida é válida e ativa
+    const empresaCheck = await client.query(
+      `SELECT id FROM empresas WHERE id = $1 AND ativo = true`,
+      [empresa_id]
+    );
+    if (empresaCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Empresa não encontrada ou inativa.' });
+    }
+
+    // Cria o usuário
     // A tabela possui DUAS colunas de senha: "password" (NOT NULL, legada)
     // e "senha_hash" (atual). Ambas precisam ser preenchidas com o mesmo hash.
     const salt = await bcrypt.genSalt(10);
@@ -286,16 +329,36 @@ app.post('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
        RETURNING id, nome, email, ativo, data_cadastro, created_at`,
       [nome, email, senhaHash]
     );
+    const novoId = novoUser.rows[0].id;
 
-    // Vincula o usuário à empresa com o papel escolhido
+    // Vincula o usuário à empresa escolhida com o papel definido
     await client.query(
       `INSERT INTO empresa_usuarios (empresa_id, usuario_id, papel, ativo)
        VALUES ($1, $2, $3, true)`,
-      [empresaId, novoUser.rows[0].id, papel]
+      [empresa_id, novoId, papel]
     );
 
+    // Vincula o usuário às unidades selecionadas (se houver)
+    if (Array.isArray(unidades) && unidades.length > 0) {
+      for (const unidade_id of unidades) {
+        // Verifica se a unidade pertence à empresa escolhida antes de vincular
+        const unidadeCheck = await client.query(
+          `SELECT id FROM unidades_monitoradas WHERE id = $1 AND empresa_id = $2 AND ativo = true`,
+          [unidade_id, empresa_id]
+        );
+        if (unidadeCheck.rows.length > 0) {
+          await client.query(
+            `INSERT INTO usuario_unidades (usuario_id, unidade_id, ativo)
+             VALUES ($1, $2, true)
+             ON CONFLICT (usuario_id, unidade_id) DO UPDATE SET ativo = true`,
+            [novoId, unidade_id]
+          );
+        }
+      }
+    }
+
     await client.query('COMMIT');
-    res.status(201).json({ ...novoUser.rows[0], papel });
+    res.status(201).json({ ...novoUser.rows[0], papel, empresa_id });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Erro ao criar usuário:', err);
@@ -367,7 +430,7 @@ app.put('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
 
     await client.query('COMMIT');
 
-    // Retorna o usuário atualizado com os campos corretos do banco
+    // Retorna o usuário atualizado
     const updated = await pool.query(
       `SELECT u.id, u.nome, u.email, u.ativo, u.data_cadastro, u.created_at, eu.papel
        FROM usuarios u
@@ -389,7 +452,6 @@ app.put('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
 app.delete('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
   const { id } = req.params;
 
-  // Impede que o admin exclua a si mesmo
   if (parseInt(id) === req.userId) {
     return res.status(400).json({ error: 'Você não pode excluir seu próprio usuário.' });
   }
@@ -398,7 +460,6 @@ app.delete('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Descobre a empresa do admin logado
     const empresaRes = await client.query(
       `SELECT empresa_id FROM empresa_usuarios WHERE usuario_id = $1 AND papel = 'ADMIN' AND ativo = true LIMIT 1`,
       [req.userId]
@@ -406,7 +467,7 @@ app.delete('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
     if (empresaRes.rows.length === 0) throw new Error('Sem empresa vinculada ao admin.');
     const empresaId = empresaRes.rows[0].empresa_id;
 
-    // Desativa o vínculo empresa_usuarios (soft delete no vínculo)
+    // Desativa o vínculo empresa_usuarios
     const result = await client.query(
       `UPDATE empresa_usuarios SET ativo = false
        WHERE empresa_id = $1 AND usuario_id = $2
@@ -418,7 +479,13 @@ app.delete('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Usuário não encontrado nesta empresa.' });
     }
 
-    // Desativa também o usuário (ativo = false na tabela usuarios)
+    // Desativa todos os vínculos de unidade do usuário
+    await client.query(
+      `UPDATE usuario_unidades SET ativo = false WHERE usuario_id = $1`,
+      [id]
+    );
+
+    // Desativa o usuário
     await client.query(`UPDATE usuarios SET ativo = false WHERE id = $1`, [id]);
 
     await client.query('COMMIT');
