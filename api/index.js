@@ -619,4 +619,211 @@ app.get('/api/session/unidades', autenticar, async (req, res) => {
   }
 });
 
+// ─── CRUD DE EMPRESAS ─────────────────────────────────────────────────────────
+
+// GET /api/empresas — lista todas as empresas (Admin vê todas; demais veem as suas)
+app.get('/api/empresas', autenticar, apenasAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, cnpj, razao_social, nome_fantasia, ativo, criado_em
+       FROM empresas
+       ORDER BY razao_social ASC`
+    );
+    res.json({ empresas: result.rows });
+  } catch (err) {
+    console.error('[GET /empresas]', err.message);
+    res.status(500).json({ error: 'Erro ao buscar empresas.', detalhe: err.message });
+  }
+});
+
+// GET /api/empresas/:id — detalhe de uma empresa com unidades e usuários vinculados
+app.get('/api/empresas/:id', autenticar, apenasAdmin, async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Dados da empresa
+    const empresaRes = await pool.query(
+      `SELECT id, cnpj, razao_social, nome_fantasia, ativo, criado_em
+       FROM empresas
+       WHERE id = $1`,
+      [id]
+    );
+    if (empresaRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Empresa não encontrada.' });
+    }
+    const empresa = empresaRes.rows[0];
+
+    // Unidades vinculadas
+    const unidadesRes = await pool.query(
+      `SELECT id, nome_unidade, codigo_unidade, ativo
+       FROM unidades_monitoradas
+       WHERE empresa_id = $1
+       ORDER BY nome_unidade ASC`,
+      [id]
+    );
+    empresa.unidades = unidadesRes.rows;
+
+    // Usuários vinculados
+    const usuariosRes = await pool.query(
+      `SELECT u.id, u.nome, u.email, eu.papel, eu.ativo
+       FROM empresa_usuarios eu
+       INNER JOIN usuarios u ON u.id = eu.usuario_id
+       WHERE eu.empresa_id = $1
+       ORDER BY u.nome ASC`,
+      [id]
+    );
+    empresa.usuarios = usuariosRes.rows;
+
+    res.json(empresa);
+  } catch (err) {
+    console.error('[GET /empresas/:id]', err.message);
+    res.status(500).json({ error: 'Erro ao buscar empresa.', detalhe: err.message });
+  }
+});
+
+// POST /api/empresas — cria nova empresa
+app.post('/api/empresas', autenticar, apenasAdmin, async (req, res) => {
+  const { razao_social, nome_fantasia, cnpj } = req.body;
+
+  if (!razao_social || !cnpj) {
+    return res.status(400).json({ error: 'Campos obrigatórios: razao_social, cnpj.' });
+  }
+
+  // Valida CNPJ (14 dígitos)
+  const cnpjDigits = cnpj.replace(/\D/g, '');
+  if (cnpjDigits.length !== 14) {
+    return res.status(400).json({ error: 'CNPJ inválido. Informe 14 dígitos.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Verifica duplicidade de CNPJ
+    const cnpjCheck = await client.query(
+      `SELECT id FROM empresas WHERE cnpj = $1`,
+      [cnpjDigits]
+    );
+    if (cnpjCheck.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'CNPJ já cadastrado no sistema.' });
+    }
+
+    const result = await client.query(
+      `INSERT INTO empresas (cnpj, razao_social, nome_fantasia)
+       VALUES ($1, $2, $3)
+       RETURNING id, cnpj, razao_social, nome_fantasia, ativo, criado_em`,
+      [cnpjDigits, razao_social.trim(), (nome_fantasia || razao_social).trim()]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[POST /empresas]', err.message);
+    res.status(500).json({ error: err.message || 'Erro ao criar empresa.' });
+  } finally {
+    client.release();
+  }
+});
+
+// PUT /api/empresas/:id — atualiza dados da empresa
+app.put('/api/empresas/:id', autenticar, apenasAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { razao_social, nome_fantasia, cnpj, ativo } = req.body;
+
+  if (!razao_social || !cnpj) {
+    return res.status(400).json({ error: 'Campos obrigatórios: razao_social, cnpj.' });
+  }
+
+  const cnpjDigits = cnpj.replace(/\D/g, '');
+  if (cnpjDigits.length !== 14) {
+    return res.status(400).json({ error: 'CNPJ inválido. Informe 14 dígitos.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Verifica se a empresa existe
+    const empresaCheck = await client.query(
+      `SELECT id FROM empresas WHERE id = $1`,
+      [id]
+    );
+    if (empresaCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Empresa não encontrada.' });
+    }
+
+    // Verifica duplicidade de CNPJ (excluindo a própria empresa)
+    const cnpjCheck = await client.query(
+      `SELECT id FROM empresas WHERE cnpj = $1 AND id != $2`,
+      [cnpjDigits, id]
+    );
+    if (cnpjCheck.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'CNPJ já pertence a outra empresa.' });
+    }
+
+    const campos = [
+      `razao_social = $1`,
+      `nome_fantasia = $2`,
+      `cnpj = $3`,
+    ];
+    const valores = [
+      razao_social.trim(),
+      (nome_fantasia || razao_social).trim(),
+      cnpjDigits,
+    ];
+
+    if (typeof ativo === 'boolean') {
+      campos.push(`ativo = $${valores.length + 1}`);
+      valores.push(ativo);
+    }
+
+    valores.push(id);
+    const result = await client.query(
+      `UPDATE empresas SET ${campos.join(', ')} WHERE id = $${valores.length}
+       RETURNING id, cnpj, razao_social, nome_fantasia, ativo, criado_em`,
+      valores
+    );
+
+    await client.query('COMMIT');
+    res.json(result.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[PUT /empresas/:id]', err.message);
+    res.status(500).json({ error: err.message || 'Erro ao atualizar empresa.' });
+  } finally {
+    client.release();
+  }
+});
+
+// DELETE /api/empresas/:id — desativa (soft delete) a empresa
+app.delete('/api/empresas/:id', autenticar, apenasAdmin, async (req, res) => {
+  const { id } = req.params;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `UPDATE empresas SET ativo = false WHERE id = $1 RETURNING id`,
+      [id]
+    );
+    if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Empresa não encontrada.' });
+    }
+
+    await client.query('COMMIT');
+    res.json({ mensagem: 'Empresa desativada com sucesso.', id: parseInt(id) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[DELETE /empresas/:id]', err.message);
+    res.status(500).json({ error: err.message || 'Erro ao desativar empresa.' });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = app;
