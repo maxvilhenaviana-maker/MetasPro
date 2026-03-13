@@ -12,6 +12,7 @@ import GoalWizard  from './pages/GoalWizard';
 import Dashboard   from './pages/Dashboard';
 import Inicial     from './pages/Inicial';
 import Usuarios    from './pages/Usuarios';
+import Empresas    from './pages/Empresas';
 import { SessionProvider } from './contexts/SessionContext';
 import api from './services/api';
 
@@ -122,7 +123,7 @@ export default function App() {
           } />
 
           {/* ── Módulos placeholder ───────────────────────────────────────── */}
-          <Route path="/empresas"       element={<PrivateRouteWithOnboarding><PlaceholderModulo titulo="Empresas" icone="🏢" /></PrivateRouteWithOnboarding>} />
+          <Route path="/empresas" element={<PrivateRouteWithOnboarding><Empresas /></PrivateRouteWithOnboarding>} />
           <Route path="/unidades"       element={<PrivateRouteWithOnboarding><PlaceholderModulo titulo="Unidades de Monitoramento" icone="🏭" /></PrivateRouteWithOnboarding>} />
           <Route path="/historico"      element={<PrivateRouteWithOnboarding><PlaceholderModulo titulo="Histórico" icone="📈" /></PrivateRouteWithOnboarding>} />
           <Route path="/resultados"     element={<PrivateRouteWithOnboarding><PlaceholderModulo titulo="Resultados" icone="📊" /></PrivateRouteWithOnboarding>} />
