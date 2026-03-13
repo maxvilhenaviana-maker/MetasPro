@@ -1,21 +1,48 @@
 // src/pages/Login.jsx
 // Tela de Login — MetasPro
-// Design: clean, fundo branco, paleta azul marinho + verde MetasPro
-// Redireciona para /inicial (não mais para /dashboard)
+// Após autenticação, verifica empresas vinculadas:
+//   - 1 empresa  → seleciona automaticamente e vai para /inicial
+//   - N empresas → abre ModalSelecionarEmpresa antes de avançar
+//   - 0 empresas → redireciona para /onboarding
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import api from '../services/api';
 import { T, globalCSS } from '../theme';
+import { useSession } from '../contexts/SessionContext';
+import ModalSelecionarEmpresa from '../components/ModalSelecionarEmpresa';
 
 export default function Login() {
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [formData, setFormData] = useState({ name: '', email: '', password: '' });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const navigate = useNavigate();
+  const [isRegistering, setIsRegistering]   = useState(false);
+  const [formData, setFormData]             = useState({ name: '', email: '', password: '' });
+  const [loading, setLoading]               = useState(false);
+  const [error, setError]                   = useState('');
+  const [modalEmpresas, setModalEmpresas]   = useState(false);
+  const [selecionandoEmp, setSelecionandoEmp] = useState(false);
 
+  const navigate = useNavigate();
+  const { inicializarSessao, empresasDisponiveis, selecionarEmpresa } = useSession();
+
+  // ── Fluxo pós-autenticação ──────────────────────────────────────────────────
+  const posAutenticacao = async () => {
+    const resultado = await inicializarSessao();
+
+    if (resultado.precisaOnboarding) {
+      navigate('/onboarding');
+      return;
+    }
+
+    if (resultado.precisaEscolherEmpresa) {
+      setModalEmpresas(true); // aguarda escolha no modal
+      return;
+    }
+
+    // Empresa já selecionada automaticamente (única empresa)
+    navigate('/inicial');
+  };
+
+  // ── Login / Registro email+senha ────────────────────────────────────────────
   const handleAuth = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -27,7 +54,7 @@ export default function Login() {
         : { email: formData.email, senha: formData.password };
       const { data } = await api.post(endpoint, payload);
       localStorage.setItem('auth_tokens', JSON.stringify(data));
-      navigate('/inicial');
+      await posAutenticacao();
     } catch (err) {
       setError(err.response?.data?.error || 'Erro ao autenticar. Verifique seus dados.');
     } finally {
@@ -35,17 +62,30 @@ export default function Login() {
     }
   };
 
+  // ── Login Google ────────────────────────────────────────────────────────────
   const onSuccessGoogle = async (credentialResponse) => {
     setLoading(true);
     setError('');
     try {
       const { data } = await api.post('/auth/google', { credential: credentialResponse.credential });
       localStorage.setItem('auth_tokens', JSON.stringify(data));
-      navigate('/inicial');
+      await posAutenticacao();
     } catch {
       setError('Erro ao autenticar com Google. Tente novamente.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ── Usuário escolheu empresa no modal ───────────────────────────────────────
+  const handleEscolherEmpresa = async (emp) => {
+    setSelecionandoEmp(true);
+    try {
+      await selecionarEmpresa(emp);
+      setModalEmpresas(false);
+      navigate('/inicial');
+    } finally {
+      setSelecionandoEmp(false);
     }
   };
 
@@ -97,8 +137,8 @@ export default function Login() {
               padding: 4,
             }}>
               {[
-                { label: 'Entrar',    value: false },
-                { label: 'Registrar',value: true  },
+                { label: 'Entrar',     value: false },
+                { label: 'Registrar',  value: true  },
               ].map(tab => (
                 <button
                   key={tab.label}
@@ -190,25 +230,13 @@ export default function Login() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 }}
               >
-                {loading && (
-                  <span style={{
-                    width: 16, height: 16,
-                    border: '2px solid rgba(255,255,255,0.3)',
-                    borderTopColor: '#fff',
-                    borderRadius: '50%',
-                    animation: 'spin 0.8s linear infinite',
-                    display: 'inline-block',
-                  }} />
-                )}
+                {loading && <Spinner />}
                 {loading ? 'Aguarde...' : isRegistering ? 'Criar Conta' : 'Entrar'}
               </button>
             </form>
 
             {/* Divisor */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              margin: '20px 0',
-            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 0' }}>
               <div style={{ flex: 1, height: 1, background: T.border }} />
               <span style={{ fontSize: 12, color: T.textDim }}>ou</span>
               <div style={{ flex: 1, height: 1, background: T.border }} />
@@ -252,11 +280,33 @@ export default function Login() {
           </p>
         </div>
       </div>
+
+      {/* Modal de seleção de empresa — aparece se usuário for multiempresa */}
+      {modalEmpresas && (
+        <ModalSelecionarEmpresa
+          empresas={empresasDisponiveis}
+          onSelecionar={handleEscolherEmpresa}
+          carregando={selecionandoEmp}
+        />
+      )}
     </>
   );
 }
 
-// ─── Estilos locais ────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function Spinner() {
+  return (
+    <span style={{
+      width: 16, height: 16,
+      border: '2px solid rgba(255,255,255,0.3)',
+      borderTopColor: '#fff',
+      borderRadius: '50%',
+      animation: 'spin 0.8s linear infinite',
+      display: 'inline-block',
+    }} />
+  );
+}
+
 const labelStyle = {
   display: 'block', fontSize: 12, fontWeight: 600,
   color: '#475569', marginBottom: 5,
