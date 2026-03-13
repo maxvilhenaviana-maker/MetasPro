@@ -532,4 +532,91 @@ app.delete('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
   }
 });
 
+// ─── ROTAS DE SESSÃO ─────────────────────────────────────────────────────────
+// Usadas pelo frontend imediatamente após o login para determinar
+// em qual empresa/unidade o usuário vai atuar na sessão.
+
+// GET /api/session/empresas — lista todas as empresas ativas do usuário logado
+// Retorna o papel em cada empresa para exibição no ModalSelecionarEmpresa.
+app.get('/api/session/empresas', autenticar, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT
+         e.id,
+         e.nome_fantasia,
+         e.razao_social,
+         e.cnpj,
+         eu.papel
+       FROM empresa_usuarios eu
+       INNER JOIN empresas e ON e.id = eu.empresa_id
+       WHERE eu.usuario_id = $1
+         AND eu.ativo = true
+         AND e.ativo = true
+       ORDER BY e.nome_fantasia ASC`,
+      [req.userId]
+    );
+    res.json({ empresas: result.rows });
+  } catch (err) {
+    console.error('[session/empresas]', err.message);
+    res.status(500).json({ error: 'Erro ao buscar empresas da sessão.' });
+  }
+});
+
+// GET /api/session/unidades?empresa_id=xxx — lista unidades ativas da empresa
+// que o usuário tem acesso (via usuario_unidades).
+// Se o usuário for ADMIN da empresa, retorna TODAS as unidades da empresa.
+app.get('/api/session/unidades', autenticar, async (req, res) => {
+  const { empresa_id } = req.query;
+  if (!empresa_id) {
+    return res.status(400).json({ error: 'Parâmetro empresa_id é obrigatório.' });
+  }
+
+  try {
+    // Verifica se o usuário pertence a esta empresa e descobre seu papel
+    const papelRes = await pool.query(
+      `SELECT papel FROM empresa_usuarios
+       WHERE usuario_id = $1 AND empresa_id = $2 AND ativo = true
+       LIMIT 1`,
+      [req.userId, empresa_id]
+    );
+
+    if (papelRes.rows.length === 0) {
+      return res.status(403).json({ error: 'Sem acesso a esta empresa.' });
+    }
+
+    const papel = papelRes.rows[0].papel;
+
+    let unidades;
+
+    if (papel === 'ADMIN') {
+      // ADMIN vê todas as unidades ativas da empresa
+      unidades = await pool.query(
+        `SELECT id, nome_unidade, codigo_unidade
+         FROM unidades_monitoradas
+         WHERE empresa_id = $1 AND ativo = true
+         ORDER BY nome_unidade ASC`,
+        [empresa_id]
+      );
+    } else {
+      // Usuários designados veem apenas as unidades vinculadas a eles
+      unidades = await pool.query(
+        `SELECT um.id, um.nome_unidade, um.codigo_unidade
+         FROM usuario_unidades uu
+         INNER JOIN unidades_monitoradas um ON um.id = uu.unidade_id
+         WHERE uu.usuario_id = $1
+           AND um.empresa_id = $2
+           AND uu.ativo = true
+           AND um.ativo = true
+         ORDER BY um.nome_unidade ASC`,
+        [req.userId, empresa_id]
+      );
+    }
+
+    res.json({ unidades: unidades.rows });
+  } catch (err) {
+    console.error('[session/unidades]', err.message);
+    res.status(500).json({ error: 'Erro ao buscar unidades da sessão.' });
+  }
+});
+
 module.exports = app;
