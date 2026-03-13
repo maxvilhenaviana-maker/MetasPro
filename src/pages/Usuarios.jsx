@@ -986,9 +986,13 @@ export default function Usuarios() {
         }
       `}</style>
 
-      <NavbarMetasPro />
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 200, flexShrink: 0 }}>
+        <NavbarMetasPro />
+      </div>
 
-      <div style={{ minHeight: 'calc(100vh - 56px)', background: T.bg, padding: '28px 24px', fontFamily: T.fontBody }}>
+      {/* Área fixa: cabeçalho + tabs */}
+      <div style={{ background: T.bg, padding: '28px 24px 0', flexShrink: 0 }}>
         <div style={{ maxWidth: 860, margin: '0 auto' }}>
 
           {/* Cabeçalho */}
@@ -1036,8 +1040,14 @@ export default function Usuarios() {
             })}
           </div>
 
-          {/* Conteúdo da ação */}
-          <div style={{ animation: 'fadeIn 0.25s ease' }}>
+        </div>{/* fecha maxWidth fixo */}
+      </div>{/* fecha área fixa */}
+
+      {/* Área rolável: conteúdo da ação */}
+      <div style={{ flex: 1, overflowY: 'auto', background: T.bg, padding: '0 24px 28px' }}>
+        <div style={{ maxWidth: 860, margin: '0 auto' }}>
+
+          <div style={{ animation: 'fadeIn 0.25s ease', paddingTop: 4 }}>
             {renderConteudo()}
           </div>
 
@@ -1056,6 +1066,7 @@ export default function Usuarios() {
           </div>
         </div>
       </div>
+      </div>{/* fecha 100vh flex container */}
 
       {/* Modal de detalhes */}
       {usuarioDetalhes && (
