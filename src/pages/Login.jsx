@@ -14,22 +14,19 @@ import { useSession } from '../contexts/SessionContext';
 import ModalSelecionarEmpresa from '../components/ModalSelecionarEmpresa';
 
 export default function Login() {
-  const [isRegistering, setIsRegistering]   = useState(false);
-  const [formData, setFormData]             = useState({ name: '', email: '', password: '' });
-  const [loading, setLoading]               = useState(false);
-  const [error, setError]                   = useState('');
-  const [modalEmpresas, setModalEmpresas]   = useState(false);
+  const [isRegistering, setIsRegistering]     = useState(false);
+  const [formData, setFormData]               = useState({ name: '', email: '', password: '' });
+  const [loading, setLoading]                 = useState(false);
+  const [error, setError]                     = useState('');
+  const [modalEmpresas, setModalEmpresas]     = useState(false);
   const [selecionandoEmp, setSelecionandoEmp] = useState(false);
 
   const navigate = useNavigate();
-  const { inicializarSessao, empresasDisponiveis, selecionarEmpresa, limparSessao } = useSession();
+  const { inicializarSessao, empresasDisponiveis, selecionarEmpresa } = useSession();
 
   // ── Fluxo pós-autenticação ──────────────────────────────────────────────────
+  // inicializarSessao() já faz a limpeza interna da sessão anterior.
   const posAutenticacao = async () => {
-    // Limpa qualquer sessão anterior (empresa/unidade) antes de iniciar nova.
-    // Evita que dados da sessão anterior contaminem o início da nova sessão.
-    limparSessao();
-
     const resultado = await inicializarSessao();
 
     if (resultado.precisaOnboarding) {
@@ -38,11 +35,10 @@ export default function Login() {
     }
 
     if (resultado.precisaEscolherEmpresa) {
-      setModalEmpresas(true); // aguarda escolha no modal
+      setModalEmpresas(true);
       return;
     }
 
-    // Empresa já selecionada automaticamente (única empresa)
     navigate('/inicial');
   };
 
@@ -134,15 +130,14 @@ export default function Login() {
             animation: 'fadeIn 0.4s ease',
           }}>
 
-            {/* Tabs registro/login */}
+            {/* Tabs */}
             <div style={{
               display: 'flex', gap: 4, marginBottom: 24,
-              background: T.bgAlt, borderRadius: T.radius,
-              padding: 4,
+              background: T.bgAlt, borderRadius: T.radius, padding: 4,
             }}>
               {[
-                { label: 'Entrar',     value: false },
-                { label: 'Registrar',  value: true  },
+                { label: 'Entrar',    value: false },
+                { label: 'Registrar', value: true  },
               ].map(tab => (
                 <button
                   key={tab.label}
@@ -168,12 +163,10 @@ export default function Login() {
                 <div style={{ marginBottom: 14 }}>
                   <label style={labelStyle}>Nome completo</label>
                   <input
-                    type="text"
-                    placeholder="Seu nome"
+                    type="text" placeholder="Seu nome"
                     value={formData.name}
                     onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    required
-                    style={inputStyle}
+                    required style={inputStyle}
                     onFocus={e => e.target.style.borderColor = T.borderFocus}
                     onBlur={e => e.target.style.borderColor = T.border}
                   />
@@ -183,12 +176,10 @@ export default function Login() {
               <div style={{ marginBottom: 14 }}>
                 <label style={labelStyle}>E-mail</label>
                 <input
-                  type="email"
-                  placeholder="seu@email.com"
+                  type="email" placeholder="seu@email.com"
                   value={formData.email}
                   onChange={e => setFormData({ ...formData, email: e.target.value })}
-                  required
-                  style={inputStyle}
+                  required style={inputStyle}
                   onFocus={e => e.target.style.borderColor = T.borderFocus}
                   onBlur={e => e.target.style.borderColor = T.border}
                 />
@@ -197,12 +188,10 @@ export default function Login() {
               <div style={{ marginBottom: 20 }}>
                 <label style={labelStyle}>Senha</label>
                 <input
-                  type="password"
-                  placeholder="Mínimo 6 caracteres"
+                  type="password" placeholder="Mínimo 6 caracteres"
                   value={formData.password}
                   onChange={e => setFormData({ ...formData, password: e.target.value })}
-                  required
-                  style={inputStyle}
+                  required style={inputStyle}
                   onFocus={e => e.target.style.borderColor = T.borderFocus}
                   onBlur={e => e.target.style.borderColor = T.border}
                 />
@@ -219,15 +208,13 @@ export default function Login() {
               )}
 
               <button
-                type="submit"
-                disabled={loading}
+                type="submit" disabled={loading}
                 style={{
                   width: '100%', padding: '13px',
                   background: loading ? T.navyDim : `linear-gradient(135deg, ${T.navy}, ${T.navyLight})`,
                   border: 'none', borderRadius: T.radius,
                   color: loading ? T.textDim : '#fff',
-                  fontSize: 15, fontWeight: 700,
-                  fontFamily: T.fontDisplay,
+                  fontSize: 15, fontWeight: 700, fontFamily: T.fontDisplay,
                   cursor: loading ? 'not-allowed' : 'pointer',
                   transition: T.transition,
                   boxShadow: loading ? 'none' : '0 4px 16px rgba(15,45,82,0.25)',
@@ -239,36 +226,29 @@ export default function Login() {
               </button>
             </form>
 
-            {/* Divisor */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 0' }}>
               <div style={{ flex: 1, height: 1, background: T.border }} />
               <span style={{ fontSize: 12, color: T.textDim }}>ou</span>
               <div style={{ flex: 1, height: 1, background: T.border }} />
             </div>
 
-            {/* Google Login */}
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
               <GoogleLogin
                 onSuccess={onSuccessGoogle}
                 onError={() => setError('Erro ao autenticar com Google.')}
-                theme="outline"
-                shape="rectangular"
-                size="large"
+                theme="outline" shape="rectangular" size="large"
                 text={isRegistering ? 'signup_with' : 'signin_with'}
               />
             </div>
 
-            {/* Botão Sandbox */}
             <button
               onClick={() => navigate('/sandbox')}
               style={{
                 width: '100%', padding: '11px',
-                background: T.bgAlt,
-                border: `1.5px solid ${T.border}`,
-                borderRadius: T.radius,
-                color: T.textMd, fontSize: 13, fontWeight: 600,
-                fontFamily: T.fontBody, cursor: 'pointer',
-                transition: T.transition,
+                background: T.bgAlt, border: `1.5px solid ${T.border}`,
+                borderRadius: T.radius, color: T.textMd,
+                fontSize: 13, fontWeight: 600, fontFamily: T.fontBody,
+                cursor: 'pointer', transition: T.transition,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = T.navy; e.currentTarget.style.color = T.navy; }}
@@ -278,14 +258,12 @@ export default function Login() {
             </button>
           </div>
 
-          {/* Rodapé */}
           <p style={{ textAlign: 'center', fontSize: 11, color: T.textDim, marginTop: 20 }}>
             MetasPro © {new Date().getFullYear()} · Todos os direitos reservados
           </p>
         </div>
       </div>
 
-      {/* Modal de seleção de empresa — aparece se usuário for multiempresa */}
       {modalEmpresas && (
         <ModalSelecionarEmpresa
           empresas={empresasDisponiveis}
@@ -297,7 +275,6 @@ export default function Login() {
   );
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function Spinner() {
   return (
     <span style={{
@@ -319,10 +296,8 @@ const labelStyle = {
 
 const inputStyle = {
   width: '100%', padding: '10px 14px',
-  background: '#f8fafc',
-  border: '1.5px solid #e2e8f0',
-  borderRadius: '8px',
-  color: '#0f2d52', fontSize: 14,
+  background: '#f8fafc', border: '1.5px solid #e2e8f0',
+  borderRadius: '8px', color: '#0f2d52', fontSize: 14,
   outline: 'none', transition: 'border-color 0.2s',
   fontFamily: "'DM Sans', sans-serif",
 };
