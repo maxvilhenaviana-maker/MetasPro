@@ -816,4 +816,227 @@ app.delete('/api/empresas/:id', autenticar, apenasAdmin, async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MÓDULO UNIDADES DE MONITORAMENTO — CRUD completo
+// ═══════════════════════════════════════════════════════════════════════════
+
+// GET /api/unidades — lista todas as unidades com nome da empresa
+app.get('/api/unidades', autenticar, apenasAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT um.id, um.empresa_id, um.nome_unidade, um.codigo_unidade, um.ativo, um.criado_em,
+              e.nome_fantasia AS empresa_nome
+       FROM unidades_monitoradas um
+       INNER JOIN empresas e ON e.id = um.empresa_id
+       ORDER BY e.nome_fantasia ASC, um.nome_unidade ASC`
+    );
+    res.json({ unidades: result.rows });
+  } catch (err) {
+    console.error('[GET /unidades]', err.message);
+    res.status(500).json({ error: 'Erro ao buscar unidades.', detalhe: err.message });
+  }
+});
+
+// GET /api/unidades/:id — detalhe com usuários vinculados
+app.get('/api/unidades/:id', autenticar, apenasAdmin, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const unidadeRes = await pool.query(
+      `SELECT um.id, um.empresa_id, um.nome_unidade, um.codigo_unidade, um.ativo, um.criado_em,
+              e.nome_fantasia AS empresa_nome
+       FROM unidades_monitoradas um
+       INNER JOIN empresas e ON e.id = um.empresa_id
+       WHERE um.id = $1`,
+      [id]
+    );
+    if (unidadeRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Unidade não encontrada.' });
+    }
+    const unidade = unidadeRes.rows[0];
+
+    // Usuários vinculados a esta unidade via usuario_unidades
+    const usuariosRes = await pool.query(
+      `SELECT u.id, u.nome, u.email, uu.ativo
+       FROM usuario_unidades uu
+       INNER JOIN usuarios u ON u.id = uu.usuario_id
+       WHERE uu.unidade_id = $1 AND uu.ativo = true
+       ORDER BY u.nome ASC`,
+      [id]
+    );
+    unidade.usuarios = usuariosRes.rows;
+
+    res.json(unidade);
+  } catch (err) {
+    console.error('[GET /unidades/:id]', err.message);
+    res.status(500).json({ error: 'Erro ao buscar unidade.', detalhe: err.message });
+  }
+});
+
+// POST /api/unidades — cria nova unidade
+app.post('/api/unidades', autenticar, apenasAdmin, async (req, res) => {
+  const { nome_unidade, codigo_unidade, empresa_id } = req.body;
+
+  if (!nome_unidade || !empresa_id) {
+    return res.status(400).json({ error: 'Campos obrigatórios: nome_unidade, empresa_id.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Verifica se a empresa existe e está ativa
+    const empresaCheck = await client.query(
+      `SELECT id FROM empresas WHERE id = $1 AND ativo = true`,
+      [empresa_id]
+    );
+    if (empresaCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Empresa não encontrada ou inativa.' });
+    }
+
+    // Verifica duplicidade de nome na mesma empresa
+    if (nome_unidade) {
+      const nomeCheck = await client.query(
+        `SELECT id FROM unidades_monitoradas WHERE empresa_id = $1 AND LOWER(nome_unidade) = LOWER($2)`,
+        [empresa_id, nome_unidade.trim()]
+      );
+      if (nomeCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Já existe uma unidade com esse nome nesta empresa.' });
+      }
+    }
+
+    // Verifica duplicidade de código na mesma empresa (se informado)
+    if (codigo_unidade && codigo_unidade.trim()) {
+      const codigoCheck = await client.query(
+        `SELECT id FROM unidades_monitoradas WHERE empresa_id = $1 AND LOWER(codigo_unidade) = LOWER($2)`,
+        [empresa_id, codigo_unidade.trim()]
+      );
+      if (codigoCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Já existe uma unidade com esse código nesta empresa.' });
+      }
+    }
+
+    const result = await client.query(
+      `INSERT INTO unidades_monitoradas (empresa_id, nome_unidade, codigo_unidade)
+       VALUES ($1, $2, $3)
+       RETURNING id, empresa_id, nome_unidade, codigo_unidade, ativo, criado_em`,
+      [empresa_id, nome_unidade.trim(), codigo_unidade?.trim() || null]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[POST /unidades]', err.message);
+    res.status(500).json({ error: err.message || 'Erro ao criar unidade.' });
+  } finally {
+    client.release();
+  }
+});
+
+// PUT /api/unidades/:id — atualiza dados da unidade
+app.put('/api/unidades/:id', autenticar, apenasAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { nome_unidade, codigo_unidade, empresa_id, ativo } = req.body;
+
+  if (!nome_unidade || !empresa_id) {
+    return res.status(400).json({ error: 'Campos obrigatórios: nome_unidade, empresa_id.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const unidadeCheck = await client.query(
+      `SELECT id FROM unidades_monitoradas WHERE id = $1`, [id]
+    );
+    if (unidadeCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Unidade não encontrada.' });
+    }
+
+    // Verifica duplicidade de nome (excluindo o próprio registro)
+    const nomeCheck = await client.query(
+      `SELECT id FROM unidades_monitoradas
+       WHERE empresa_id = $1 AND LOWER(nome_unidade) = LOWER($2) AND id != $3`,
+      [empresa_id, nome_unidade.trim(), id]
+    );
+    if (nomeCheck.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Já existe outra unidade com esse nome nesta empresa.' });
+    }
+
+    // Verifica duplicidade de código (excluindo o próprio registro)
+    if (codigo_unidade && codigo_unidade.trim()) {
+      const codigoCheck = await client.query(
+        `SELECT id FROM unidades_monitoradas
+         WHERE empresa_id = $1 AND LOWER(codigo_unidade) = LOWER($2) AND id != $3`,
+        [empresa_id, codigo_unidade.trim(), id]
+      );
+      if (codigoCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Já existe outra unidade com esse código nesta empresa.' });
+      }
+    }
+
+    const campos = [`nome_unidade = $1`, `codigo_unidade = $2`, `empresa_id = $3`];
+    const valores = [
+      nome_unidade.trim(),
+      codigo_unidade?.trim() || null,
+      empresa_id,
+    ];
+
+    if (typeof ativo === 'boolean') {
+      campos.push(`ativo = $${valores.length + 1}`);
+      valores.push(ativo);
+    }
+
+    valores.push(id);
+    const result = await client.query(
+      `UPDATE unidades_monitoradas SET ${campos.join(', ')} WHERE id = $${valores.length}
+       RETURNING id, empresa_id, nome_unidade, codigo_unidade, ativo, criado_em`,
+      valores
+    );
+
+    await client.query('COMMIT');
+    res.json(result.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[PUT /unidades/:id]', err.message);
+    res.status(500).json({ error: err.message || 'Erro ao atualizar unidade.' });
+  } finally {
+    client.release();
+  }
+});
+
+// DELETE /api/unidades/:id — desativa (soft delete) a unidade
+app.delete('/api/unidades/:id', autenticar, apenasAdmin, async (req, res) => {
+  const { id } = req.params;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `UPDATE unidades_monitoradas SET ativo = false WHERE id = $1 RETURNING id`,
+      [id]
+    );
+    if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Unidade não encontrada.' });
+    }
+
+    await client.query('COMMIT');
+    res.json({ mensagem: 'Unidade desativada com sucesso.', id });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[DELETE /unidades/:id]', err.message);
+    res.status(500).json({ error: err.message || 'Erro ao desativar unidade.' });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = app;
