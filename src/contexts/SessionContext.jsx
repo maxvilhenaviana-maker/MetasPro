@@ -41,7 +41,7 @@ export function SessionProvider({ children }) {
     if (salvo) {
       if (salvo.empresa) setEmpresaState(salvo.empresa);
       if (salvo.papel)   setPapelState(salvo.papel);
-      if (salvo.unidade) setUnidadeState(salvo.unidade);
+      // salvo.unidade ignorado — unidade deve ser escolhida a cada sessão
     }
   }, []);
 
