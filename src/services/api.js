@@ -1,29 +1,42 @@
 // src/services/api.js
 // Corrigido para compatibilidade com a estrutura de token do index.js atual
 // O index.js salva: { token, user } → lemos "token" diretamente
+// Envia X-Empresa-Id em toda requisição autenticada para suporte multi-tenant.
 
 import axios from 'axios';
+
+const SESSION_KEY = 'session_context';
 
 const api = axios.create({
   baseURL: '/api'
 });
 
-// ─── Interceptor de REQUEST: injeta o token ───────────────────────────────────
+// ─── Interceptor de REQUEST: injeta token e empresa ativa ─────────────────────
 api.interceptors.request.use((config) => {
   try {
+    // ── Token JWT ──────────────────────────────────────────────────────────────
     const raw = localStorage.getItem('auth_tokens');
     if (raw) {
       const parsed = JSON.parse(raw);
-      // Suporta ambos os formatos:
-      // Formato antigo (index.js atual): { token, user }
-      // Formato novo (futuro):           { accessToken, refreshToken }
       const bearerToken = parsed.accessToken || parsed.token;
       if (bearerToken) {
         config.headers.Authorization = `Bearer ${bearerToken}`;
       }
     }
+
+    // ── Empresa ativa (multi-tenant) ───────────────────────────────────────────
+    // Lê do SessionContext salvo no localStorage e injeta como header.
+    // O backend usa este header para todas as queries multi-tenant,
+    // validando que o usuário logado realmente tem vínculo com ela.
+    const rawSession = localStorage.getItem(SESSION_KEY);
+    if (rawSession) {
+      const session = JSON.parse(rawSession);
+      if (session?.empresa?.id) {
+        config.headers['X-Empresa-Id'] = session.empresa.id;
+      }
+    }
   } catch {
-    // Ignora erro de parse
+    // Ignora erro de parse — a requisição segue sem o header
   }
   return config;
 });
