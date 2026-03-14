@@ -22,10 +22,14 @@ export default function Login() {
   const [selecionandoEmp, setSelecionandoEmp] = useState(false);
 
   const navigate = useNavigate();
-  const { inicializarSessao, empresasDisponiveis, selecionarEmpresa } = useSession();
+  const { inicializarSessao, empresasDisponiveis, selecionarEmpresa, limparSessao } = useSession();
 
   // ── Fluxo pós-autenticação ──────────────────────────────────────────────────
   const posAutenticacao = async () => {
+    // Limpa qualquer sessão anterior (empresa/unidade) antes de iniciar nova.
+    // Evita que dados da sessão anterior contaminem o início da nova sessão.
+    limparSessao();
+
     const resultado = await inicializarSessao();
 
     if (resultado.precisaOnboarding) {
