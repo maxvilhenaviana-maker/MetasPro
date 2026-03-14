@@ -33,19 +33,35 @@ function autenticar(req, res, next) {
 }
 
 // ─── Middleware de permissão ADMIN ────────────────────────────────────────────
+// Lê X-Empresa-Id enviado pelo frontend (via api.js interceptor).
+// Valida que o usuário logado é ADMIN nessa empresa específica.
+// Expõe req.empresaId para todos os handlers downstream.
 async function apenasAdmin(req, res, next) {
   try {
-    const result = await pool.query(
-      `SELECT eu.papel FROM empresa_usuarios eu
-       WHERE eu.usuario_id = $1 AND eu.papel = 'ADMIN' AND eu.ativo = true
-       LIMIT 1`,
-      [req.userId]
-    );
-    if (result.rows.length === 0) {
-      return res.status(403).json({ error: 'Acesso restrito a administradores.' });
+    const empresaId = req.headers['x-empresa-id'];
+    if (!empresaId) {
+      return res.status(400).json({ error: 'Header X-Empresa-Id ausente. Selecione uma empresa antes de continuar.' });
     }
+
+    const result = await pool.query(
+      `SELECT eu.papel, eu.empresa_id
+       FROM empresa_usuarios eu
+       WHERE eu.usuario_id = $1
+         AND eu.empresa_id = $2
+         AND eu.papel = 'ADMIN'
+         AND eu.ativo = true
+       LIMIT 1`,
+      [req.userId, empresaId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(403).json({ error: 'Acesso restrito a administradores desta empresa.' });
+    }
+
+    req.empresaId = empresaId; // disponível em todos os handlers
     next();
   } catch (err) {
+    console.error('[apenasAdmin]', err.message);
     res.status(500).json({ error: 'Erro ao verificar permissões.' });
   }
 }
@@ -175,14 +191,7 @@ app.get('/api/opcoes/unidades', autenticar, apenasAdmin, async (req, res) => {
 // GET /api/usuarios — lista todos os usuários da empresa do admin logado
 app.get('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
   try {
-    const empresaRes = await pool.query(
-      `SELECT empresa_id FROM empresa_usuarios WHERE usuario_id = $1 AND papel = 'ADMIN' AND ativo = true LIMIT 1`,
-      [req.userId]
-    );
-    if (empresaRes.rows.length === 0) {
-      return res.status(403).json({ error: 'Nenhuma empresa vinculada ao administrador.' });
-    }
-    const empresaId = empresaRes.rows[0].empresa_id;
+    const empresaId = req.empresaId; // definido por apenasAdmin via X-Empresa-Id
 
     const result = await pool.query(
       `SELECT
@@ -235,12 +244,7 @@ app.get('/api/usuarios/me/perfil', autenticar, async (req, res) => {
 app.get('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
   const { id } = req.params;
   try {
-    const empresaRes = await pool.query(
-      `SELECT empresa_id FROM empresa_usuarios WHERE usuario_id = $1 AND papel = 'ADMIN' AND ativo = true LIMIT 1`,
-      [req.userId]
-    );
-    if (empresaRes.rows.length === 0) return res.status(403).json({ error: 'Sem empresa vinculada.' });
-    const empresaId = empresaRes.rows[0].empresa_id;
+    const empresaId = req.empresaId; // definido por apenasAdmin via X-Empresa-Id
 
     const result = await pool.query(
       `SELECT
@@ -374,18 +378,11 @@ app.post('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
 app.put('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
   const { id } = req.params;
   const { nome, email, papel, ativo, novaSenha, unidades } = req.body;
-  // unidades: array de UUIDs das unidades selecionadas (se presente, substitui as atuais)
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    const empresaRes = await client.query(
-      `SELECT empresa_id FROM empresa_usuarios WHERE usuario_id = $1 AND papel = 'ADMIN' AND ativo = true LIMIT 1`,
-      [req.userId]
-    );
-    if (empresaRes.rows.length === 0) throw new Error('Sem empresa vinculada ao admin.');
-    const empresaId = empresaRes.rows[0].empresa_id;
+    const empresaId = req.empresaId; // definido por apenasAdmin via X-Empresa-Id
 
     // Confirma que o usuário pertence a esta empresa
     const pertenceCheck = await client.query(
@@ -494,13 +491,7 @@ app.delete('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    const empresaRes = await client.query(
-      `SELECT empresa_id FROM empresa_usuarios WHERE usuario_id = $1 AND papel = 'ADMIN' AND ativo = true LIMIT 1`,
-      [req.userId]
-    );
-    if (empresaRes.rows.length === 0) throw new Error('Sem empresa vinculada ao admin.');
-    const empresaId = empresaRes.rows[0].empresa_id;
+    const empresaId = req.empresaId; // definido por apenasAdmin via X-Empresa-Id
 
     // Desativa o vínculo empresa_usuarios
     const result = await client.query(
