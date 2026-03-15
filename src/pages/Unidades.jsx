@@ -1,7 +1,7 @@
 // src/pages/Unidades.jsx
-// Módulo completo de Gestão de Unidades de Monitoramento — MetasPro
-// Ações: Consultar, Incluir, Alterar, Excluir (soft delete)
-// Padrão idêntico ao módulo de Empresas e Usuários
+// Modulo completo de Gestao de Unidades de Monitoramento — MetasPro
+// Acoes: Consultar, Incluir, Alterar, Excluir
+// Molde identico ao Usuarios.jsx — mesma estrutura de componentes e UX
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -10,6 +10,7 @@ import { T } from '../theme';
 import api from '../services/api';
 
 // ─── Helpers visuais ──────────────────────────────────────────────────────────
+
 const StatusDot = ({ ativo }) => (
   <span style={{
     display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -36,7 +37,7 @@ const Spinner = () => (
   }} />
 );
 
-// ─── Campo de Formulário ──────────────────────────────────────────────────────
+// ─── Campo de Formulario ─────────────────────────────────────────────────────
 function Campo({ label, required, children, dica }) {
   return (
     <div style={{ marginBottom: 16 }}>
@@ -108,7 +109,10 @@ function Toast({ msg, tipo, onClose }) {
     }}>
       <span style={{ fontSize: 18 }}>{c.icon}</span>
       <span style={{ fontSize: 13, color: c.color, fontFamily: T.fontBody, flex: 1 }}>{msg}</span>
-      <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: c.color, fontSize: 16 }}>×</button>
+      <button onClick={onClose} style={{
+        background: 'none', border: 'none', cursor: 'pointer',
+        color: c.color, fontSize: 16,
+      }}>x</button>
     </div>
   );
 }
@@ -118,23 +122,28 @@ function ModalDetalhes({ unidade, onFechar, onEditar, carregando }) {
   if (!unidade) return null;
 
   const campos = [
-    { label: 'ID',             valor: unidade.id },
-    { label: 'Nome da Unidade',valor: unidade.nome_unidade || '—' },
-    { label: 'Código',         valor: unidade.codigo_unidade || '—' },
-    { label: 'Empresa',        valor: unidade.empresa_nome || '—' },
-    { label: 'Status',         valor: <StatusDot ativo={unidade.ativo} /> },
-    { label: 'Usuários vinculados', valor: carregando
+    { label: 'ID',           valor: unidade.id },
+    { label: 'Nome',         valor: unidade.nome_unidade },
+    { label: 'Codigo',       valor: unidade.codigo_unidade || '—' },
+    { label: 'Status',       valor: <StatusDot ativo={unidade.ativo} /> },
+    { label: 'Empresa',      valor: unidade.empresa_nome || unidade.nome_fantasia || unidade.empresa_razao || '—' },
+    { label: 'Usuarios',     valor: carregando
         ? <span style={{ fontSize: 12, color: '#94a3b8' }}>Carregando...</span>
         : unidade.usuarios && unidade.usuarios.length > 0
           ? <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {unidade.usuarios.map(u => (
                 <span key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: T.blue, display: 'inline-block' }} />
-                  {u.nome} <span style={{ color: '#94a3b8', fontSize: 11 }}>({u.email})</span>
+                  <span style={{
+                    width: 7, height: 7, borderRadius: '50%',
+                    background: u.vinculo_ativo ? '#16a34a' : '#94a3b8',
+                    display: 'inline-block',
+                  }} />
+                  {u.nome}
+                  <span style={{ color: '#94a3b8', fontSize: 11 }}>({u.papel})</span>
                 </span>
               ))}
             </div>
-          : <span style={{ fontSize: 12, color: '#94a3b8' }}>Nenhum usuário vinculado</span>
+          : <span style={{ fontSize: 12, color: '#94a3b8' }}>Nenhum usuario vinculado</span>
     },
     { label: 'Criado em', valor: unidade.criado_em ? new Date(unidade.criado_em).toLocaleString('pt-BR') : '—' },
   ];
@@ -153,9 +162,9 @@ function ModalDetalhes({ unidade, onFechar, onEditar, carregando }) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexShrink: 0 }}>
           <h3 style={{ fontFamily: "'Sora', sans-serif", fontWeight: 700, fontSize: 18, color: '#0f2d52', margin: 0 }}>
-            🏭 Detalhes da Unidade
+            Detalhes da Unidade
           </h3>
-          <button onClick={onFechar} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#94a3b8', lineHeight: 1 }}>×</button>
+          <button onClick={onFechar} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#94a3b8', lineHeight: 1 }}>x</button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24, overflowY: 'auto', flexGrow: 1 }}>
           {campos.map(({ label, valor }) => (
@@ -183,14 +192,14 @@ function ModalDetalhes({ unidade, onFechar, onEditar, carregando }) {
             flex: 2, padding: '10px 0', background: '#0f2d52',
             border: 'none', borderRadius: 8, color: '#fff',
             fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-          }}>✏️ Editar esta unidade</button>
+          }}>Editar esta Unidade</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Modal de Confirmação de Exclusão ─────────────────────────────────────────
+// ─── Modal de Confirmacao de Exclusao ─────────────────────────────────────────
 function ModalConfirmar({ unidade, onConfirmar, onCancelar, loading }) {
   return (
     <div style={{
@@ -204,11 +213,11 @@ function ModalConfirmar({ unidade, onConfirmar, onCancelar, loading }) {
         boxShadow: T.shadowLg, textAlign: 'center',
       }}>
         <div style={{ fontSize: 48, marginBottom: 12 }}>🗑️</div>
-        <h3 style={{ fontFamily: T.fontDisplay, color: T.text, marginBottom: 8 }}>Excluir Unidade</h3>
+        <h3 style={{ fontFamily: T.fontDisplay, color: T.text, marginBottom: 8 }}>Desativar Unidade</h3>
         <p style={{ color: T.textMd, fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>
           Deseja desativar a unidade <strong>{unidade?.nome_unidade}</strong>?<br />
           <span style={{ fontSize: 12, color: T.textDim }}>
-            O registro é preservado — apenas o acesso será bloqueado.
+            O registro e preservado — apenas sera marcado como inativo.
           </span>
         </p>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
@@ -225,7 +234,7 @@ function ModalConfirmar({ unidade, onConfirmar, onCancelar, loading }) {
             display: 'flex', alignItems: 'center', gap: 8,
             opacity: loading ? 0.7 : 1,
           }}>
-            {loading ? <Spinner /> : '🗑️'} Confirmar Exclusão
+            {loading ? <Spinner /> : '🗑️'} Confirmar Desativacao
           </button>
         </div>
       </div>
@@ -233,24 +242,19 @@ function ModalConfirmar({ unidade, onConfirmar, onCancelar, loading }) {
   );
 }
 
-// ─── Formulário Incluir ───────────────────────────────────────────────────────
-function FormularioIncluir({ onSalvar, onCancelar, loading, empresas }) {
-  const [form, setForm] = useState({
-    nome_unidade: '',
-    codigo_unidade: '',
-    empresa_id: empresas.length === 1 ? empresas[0].id : '',
-  });
+// ─── Formulario Incluir ───────────────────────────────────────────────────────
+function FormularioIncluir({ onSalvar, onCancelar, loading }) {
+  const [form, setForm] = useState({ nome_unidade: '', codigo_unidade: '' });
   const [erros, setErros] = useState({});
 
   const set = (campo) => (e) => {
     setForm(f => ({ ...f, [campo]: e.target.value }));
-    setErros(er => ({ ...er, [campo]: undefined }));
+    setErros(prev => ({ ...prev, [campo]: undefined }));
   };
 
   const validar = () => {
     const e = {};
-    if (!form.nome_unidade.trim()) e.nome_unidade = 'Nome da unidade obrigatório.';
-    if (!form.empresa_id) e.empresa_id = 'Selecione a empresa.';
+    if (!form.nome_unidade.trim()) e.nome_unidade = 'Nome da unidade obrigatorio.';
     return e;
   };
 
@@ -258,9 +262,8 @@ function FormularioIncluir({ onSalvar, onCancelar, loading, empresas }) {
     const e = validar();
     if (Object.keys(e).length > 0) { setErros(e); return; }
     onSalvar({
-      nome_unidade:   form.nome_unidade.trim(),
-      codigo_unidade: form.codigo_unidade.trim() || null,
-      empresa_id:     form.empresa_id,
+      nome_unidade:    form.nome_unidade.trim(),
+      codigo_unidade:  form.codigo_unidade.trim() || undefined,
     });
   };
 
@@ -268,99 +271,84 @@ function FormularioIncluir({ onSalvar, onCancelar, loading, empresas }) {
     ? <span style={{ fontSize: 11, color: T.red, marginTop: 3, display: 'block' }}>{erros[campo]}</span>
     : null;
 
-  const selectStyle = {
-    width: '100%', padding: '9px 12px',
-    border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
-    fontSize: 13, fontFamily: T.fontBody, color: T.text,
-    background: T.surface, outline: 'none', cursor: 'pointer',
-    boxSizing: 'border-box',
-  };
-
   return (
     <div style={{
       background: T.surface, borderRadius: T.radiusLg,
       border: `1px solid ${T.border}`, boxShadow: T.shadow,
-      padding: 28, maxWidth: 560,
+      padding: 28, maxWidth: 520,
     }}>
       <h3 style={{
         fontFamily: T.fontDisplay, fontWeight: 700,
-        fontSize: 18, color: T.text, marginBottom: 24,
+        fontSize: 18, color: T.navy, marginBottom: 22,
         display: 'flex', alignItems: 'center', gap: 8,
       }}>
-        🏭 Nova Unidade de Monitoramento
+        Nova Unidade de Monitoramento
       </h3>
 
-      <Campo label="Empresa" required>
-        <select value={form.empresa_id} onChange={set('empresa_id')} style={selectStyle}>
-          <option value="">Selecione a empresa...</option>
-          {empresas.map(emp => (
-            <option key={emp.id} value={emp.id}>{emp.nome_fantasia || emp.razao_social}</option>
-          ))}
-        </select>
-        <ErrMsg campo="empresa_id" />
-      </Campo>
-
-      <Campo label="Nome da Unidade" required>
+      <Campo label="Nome da Unidade" required
+        dica="Nome completo da unidade. Ex.: Filial Centro, Loja Savassi, Setor Producao.">
         <Input
           value={form.nome_unidade}
           onChange={set('nome_unidade')}
-          placeholder="Ex.: Filial Centro, Unidade São Paulo, Setor A..."
+          placeholder="Ex.: Filial Centro"
           required
           maxLength={255}
         />
         <ErrMsg campo="nome_unidade" />
       </Campo>
 
-      <Campo label="Código da Unidade" dica="Código interno opcional para identificação rápida.">
+      <Campo label="Codigo da Unidade"
+        dica="Codigo curto opcional. Se nao informado, sera gerado automaticamente (UN-01, UN-02...).">
         <Input
           value={form.codigo_unidade}
           onChange={set('codigo_unidade')}
-          placeholder="Ex.: SP-001, FIL-02..."
+          placeholder="Ex.: FIL-CENTRO (opcional)"
           maxLength={50}
         />
+        <ErrMsg campo="codigo_unidade" />
       </Campo>
 
       <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
         <button onClick={onCancelar} disabled={loading} style={{
-          flex: 1, padding: '11px 0', background: T.surface,
-          border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
-          color: T.textMd, fontSize: 13, cursor: 'pointer', fontFamily: T.fontBody,
+          flex: 1, padding: '10px 0',
+          background: T.surface, border: `1.5px solid ${T.border}`,
+          borderRadius: T.radiusSm, color: T.textMd,
+          fontSize: 13, cursor: 'pointer', fontFamily: T.fontBody,
         }}>Cancelar</button>
         <button onClick={handleSubmit} disabled={loading} style={{
-          flex: 2, padding: '11px 0', background: T.green,
-          border: 'none', borderRadius: T.radiusSm, color: '#fff',
+          flex: 2, padding: '10px 0',
+          background: T.green, border: 'none',
+          borderRadius: T.radiusSm, color: '#fff',
           fontSize: 13, fontWeight: 600, cursor: 'pointer',
           fontFamily: T.fontBody,
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           opacity: loading ? 0.7 : 1,
         }}>
-          {loading ? <Spinner /> : '💾 Salvar Unidade'}
+          {loading ? <Spinner /> : '✅'} Salvar Unidade
         </button>
       </div>
     </div>
   );
 }
 
-// ─── Formulário Alterar ───────────────────────────────────────────────────────
-function FormularioAlterar({ unidadeInicial, onSalvar, onCancelar, loading, empresas }) {
+// ─── Formulario Alterar ───────────────────────────────────────────────────────
+function FormularioAlterar({ unidadeInicial, onSalvar, onCancelar, loading }) {
   const [form, setForm] = useState({
     nome_unidade:   unidadeInicial?.nome_unidade   || '',
     codigo_unidade: unidadeInicial?.codigo_unidade || '',
-    empresa_id:     unidadeInicial?.empresa_id     || '',
-    ativo: typeof unidadeInicial?.ativo === 'boolean' ? unidadeInicial.ativo : true,
+    ativo:          unidadeInicial?.ativo !== false,
   });
   const [erros, setErros] = useState({});
 
   const set = (campo) => (e) => {
-    const valor = campo === 'ativo' ? e.target.value === 'true' : e.target.value;
-    setForm(f => ({ ...f, [campo]: valor }));
-    setErros(er => ({ ...er, [campo]: undefined }));
+    const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    setForm(f => ({ ...f, [campo]: val }));
+    setErros(prev => ({ ...prev, [campo]: undefined }));
   };
 
   const validar = () => {
     const e = {};
-    if (!form.nome_unidade.trim()) e.nome_unidade = 'Nome da unidade obrigatório.';
-    if (!form.empresa_id) e.empresa_id = 'Selecione a empresa.';
+    if (!form.nome_unidade.trim()) e.nome_unidade = 'Nome da unidade obrigatorio.';
     return e;
   };
 
@@ -369,8 +357,7 @@ function FormularioAlterar({ unidadeInicial, onSalvar, onCancelar, loading, empr
     if (Object.keys(e).length > 0) { setErros(e); return; }
     onSalvar({
       nome_unidade:   form.nome_unidade.trim(),
-      codigo_unidade: form.codigo_unidade.trim() || null,
-      empresa_id:     form.empresa_id,
+      codigo_unidade: form.codigo_unidade.trim() || undefined,
       ativo:          form.ativo,
     });
   };
@@ -379,91 +366,95 @@ function FormularioAlterar({ unidadeInicial, onSalvar, onCancelar, loading, empr
     ? <span style={{ fontSize: 11, color: T.red, marginTop: 3, display: 'block' }}>{erros[campo]}</span>
     : null;
 
-  const selectStyle = {
-    width: '100%', padding: '9px 12px',
-    border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
-    fontSize: 13, fontFamily: T.fontBody, color: T.text,
-    background: T.surface, outline: 'none', cursor: 'pointer',
-    boxSizing: 'border-box',
-  };
-
   return (
     <div style={{
       background: T.surface, borderRadius: T.radiusLg,
       border: `1px solid ${T.border}`, boxShadow: T.shadow,
-      padding: 28, maxWidth: 560,
+      padding: 28, maxWidth: 520,
     }}>
       <h3 style={{
         fontFamily: T.fontDisplay, fontWeight: 700,
-        fontSize: 18, color: T.text, marginBottom: 24,
+        fontSize: 18, color: T.navy, marginBottom: 6,
         display: 'flex', alignItems: 'center', gap: 8,
       }}>
-        ✏️ Alterar Unidade
+        Alterar Unidade
       </h3>
-
-      <Campo label="Empresa" required>
-        <select value={form.empresa_id} onChange={set('empresa_id')} style={selectStyle}>
-          <option value="">Selecione a empresa...</option>
-          {empresas.map(emp => (
-            <option key={emp.id} value={emp.id}>{emp.nome_fantasia || emp.razao_social}</option>
-          ))}
-        </select>
-        <ErrMsg campo="empresa_id" />
-      </Campo>
+      <p style={{ fontSize: 12, color: T.textDim, marginBottom: 22, fontFamily: T.fontBody }}>
+        Editando: <strong style={{ color: T.navy }}>{unidadeInicial?.nome_unidade}</strong>
+      </p>
 
       <Campo label="Nome da Unidade" required>
         <Input
           value={form.nome_unidade}
           onChange={set('nome_unidade')}
-          placeholder="Ex.: Filial Centro, Unidade São Paulo..."
+          placeholder="Nome da unidade"
           required
           maxLength={255}
         />
         <ErrMsg campo="nome_unidade" />
       </Campo>
 
-      <Campo label="Código da Unidade" dica="Código interno opcional.">
+      <Campo label="Codigo da Unidade"
+        dica="Deixe em branco para manter o codigo atual.">
         <Input
           value={form.codigo_unidade}
           onChange={set('codigo_unidade')}
-          placeholder="Ex.: SP-001..."
+          placeholder="Codigo da unidade"
           maxLength={50}
         />
+        <ErrMsg campo="codigo_unidade" />
       </Campo>
 
       <Campo label="Status">
-        <select value={String(form.ativo)} onChange={set('ativo')} style={selectStyle}>
-          <option value="true">Ativa</option>
-          <option value="false">Inativa</option>
-        </select>
+        <label style={{
+          display: 'inline-flex', alignItems: 'center', gap: 10,
+          cursor: 'pointer', fontFamily: T.fontBody, fontSize: 13,
+          padding: '9px 14px', borderRadius: T.radiusSm,
+          border: `1.5px solid ${T.border}`,
+          background: form.ativo ? '#f0fdf4' : '#fff',
+        }}>
+          <input
+            type="checkbox"
+            checked={form.ativo}
+            onChange={set('ativo')}
+            style={{ width: 15, height: 15, accentColor: T.green, cursor: 'pointer' }}
+          />
+          <span style={{ color: form.ativo ? T.green : T.textMd, fontWeight: form.ativo ? 600 : 400 }}>
+            {form.ativo ? 'Unidade Ativa' : 'Unidade Inativa'}
+          </span>
+        </label>
       </Campo>
 
       <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
         <button onClick={onCancelar} disabled={loading} style={{
-          flex: 1, padding: '11px 0', background: T.surface,
-          border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
-          color: T.textMd, fontSize: 13, cursor: 'pointer', fontFamily: T.fontBody,
+          flex: 1, padding: '10px 0',
+          background: T.surface, border: `1.5px solid ${T.border}`,
+          borderRadius: T.radiusSm, color: T.textMd,
+          fontSize: 13, cursor: 'pointer', fontFamily: T.fontBody,
         }}>Cancelar</button>
         <button onClick={handleSubmit} disabled={loading} style={{
-          flex: 2, padding: '11px 0', background: T.navy,
-          border: 'none', borderRadius: T.radiusSm, color: '#fff',
+          flex: 2, padding: '10px 0',
+          background: T.navy, border: 'none',
+          borderRadius: T.radiusSm, color: '#fff',
           fontSize: 13, fontWeight: 600, cursor: 'pointer',
           fontFamily: T.fontBody,
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           opacity: loading ? 0.7 : 1,
         }}>
-          {loading ? <Spinner /> : '💾 Salvar Alterações'}
+          {loading ? <Spinner /> : '💾'} Salvar Alteracoes
         </button>
       </div>
     </div>
   );
 }
 
-// ─── Tabela de Consulta ───────────────────────────────────────────────────────
+// ─── Botao de Acao na Tabela ──────────────────────────────────────────────────
 function BtnAcao({ icon, title, cor, onClick }) {
   const [hover, setHover] = useState(false);
   return (
-    <button onClick={onClick} title={title}
+    <button
+      onClick={onClick}
+      title={title}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
@@ -473,21 +464,28 @@ function BtnAcao({ icon, title, cor, onClick }) {
         borderRadius: T.radiusSm,
         cursor: 'pointer', fontSize: 13,
         transition: T.transition,
-      }}>
+      }}
+    >
       {icon}
     </button>
   );
 }
 
+// ─── Tabela de Consulta ───────────────────────────────────────────────────────
 function TabelaUnidades({ unidades, onEditar, onExcluir, onVerDetalhes, busca, acao }) {
   const filtradas = unidades.filter(u =>
-    `${u.nome_unidade} ${u.codigo_unidade || ''} ${u.empresa_nome || ''}`.toLowerCase().includes(busca.toLowerCase())
+    `${u.nome_unidade} ${u.codigo_unidade || ''}`.toLowerCase().includes(busca.toLowerCase())
   );
 
   if (filtradas.length === 0) {
     return (
-      <div style={{ padding: '32px 24px', textAlign: 'center', color: T.textDim, fontFamily: T.fontBody, fontSize: 14 }}>
-        {busca ? `Nenhuma unidade encontrada para "${busca}".` : 'Nenhuma unidade cadastrada.'}
+      <div style={{
+        padding: '32px 24px', textAlign: 'center',
+        color: T.textDim, fontFamily: T.fontBody, fontSize: 14,
+      }}>
+        {busca
+          ? `Nenhuma unidade encontrada para "${busca}".`
+          : 'Nenhuma unidade cadastrada para esta empresa.'}
       </div>
     );
   }
@@ -497,7 +495,7 @@ function TabelaUnidades({ unidades, onEditar, onExcluir, onVerDetalhes, busca, a
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ background: T.bgAlt }}>
-            {['Nome da Unidade', 'Código', 'Empresa', 'Status', 'Criado em', 'Ações'].map(h => (
+            {['Nome da Unidade', 'Codigo', 'Usuarios', 'Status', 'Criado em', 'Acoes'].map(h => (
               <th key={h} style={{
                 padding: '10px 14px', textAlign: 'left',
                 fontSize: 11, fontWeight: 700, color: T.textMd,
@@ -509,40 +507,56 @@ function TabelaUnidades({ unidades, onEditar, onExcluir, onVerDetalhes, busca, a
           </tr>
         </thead>
         <tbody>
-          {filtradas.map((uni, i) => (
-            <tr key={uni.id}
+          {filtradas.map((u, i) => (
+            <tr
+              key={u.id}
               style={{ background: i % 2 === 0 ? T.surface : T.bgAlt, transition: T.transition }}
               onMouseEnter={e => e.currentTarget.style.background = T.surfaceHover}
               onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? T.surface : T.bgAlt}
             >
               <td style={{ padding: '11px 14px', fontFamily: T.fontBody, fontSize: 13, color: T.text, fontWeight: 600 }}>
                 <button
-                  onClick={() => acao === 'excluir' ? onExcluir(uni) : (onVerDetalhes && onVerDetalhes(uni))}
+                  onClick={() => acao === 'excluir' ? onExcluir(u) : (onVerDetalhes && onVerDetalhes(u))}
                   style={{
                     background: 'none', border: 'none', cursor: 'pointer',
-                    color: acao === 'excluir' ? T.red : T.navy, fontWeight: 600, fontSize: 13,
+                    color: acao === 'excluir' ? T.red : T.navy,
+                    fontWeight: 600, fontSize: 13,
                     fontFamily: T.fontBody, padding: 0,
                     textDecoration: 'underline dotted',
                     textDecorationColor: acao === 'excluir' ? T.red : T.border,
                   }}
                 >
-                  {uni.nome_unidade}
+                  {u.nome_unidade}
                 </button>
               </td>
               <td style={{ padding: '11px 14px', fontFamily: T.fontBody, fontSize: 13, color: T.textMd }}>
-                {uni.codigo_unidade || <span style={{ color: T.textDim, fontStyle: 'italic' }}>—</span>}
+                {u.codigo_unidade
+                  ? <span style={{
+                      background: '#f0f7ff', border: '1px solid #bfdbfe',
+                      borderRadius: 6, padding: '2px 9px',
+                      fontSize: 12, fontWeight: 600, color: '#1d4ed8',
+                    }}>{u.codigo_unidade}</span>
+                  : <span style={{ color: T.textDim, fontSize: 12 }}>—</span>
+                }
               </td>
               <td style={{ padding: '11px 14px', fontFamily: T.fontBody, fontSize: 13, color: T.textMd }}>
-                {uni.empresa_nome || '—'}
+                {u.total_usuarios > 0
+                  ? <span style={{
+                      background: '#f0fdf4', border: '1px solid #86efac',
+                      borderRadius: 6, padding: '2px 9px',
+                      fontSize: 12, fontWeight: 600, color: '#15803d',
+                    }}>{u.total_usuarios} usuario{u.total_usuarios !== 1 ? 's' : ''}</span>
+                  : <span style={{ color: T.textDim, fontSize: 12 }}>Nenhum</span>
+                }
               </td>
-              <td style={{ padding: '11px 14px' }}><StatusDot ativo={uni.ativo} /></td>
+              <td style={{ padding: '11px 14px' }}><StatusDot ativo={u.ativo} /></td>
               <td style={{ padding: '11px 14px', fontFamily: T.fontBody, fontSize: 12, color: T.textDim, whiteSpace: 'nowrap' }}>
-                {uni.criado_em ? new Date(uni.criado_em).toLocaleDateString('pt-BR') : '—'}
+                {u.criado_em ? new Date(u.criado_em).toLocaleDateString('pt-BR') : '—'}
               </td>
               <td style={{ padding: '11px 14px' }}>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <BtnAcao icon="✏️" title="Alterar" cor={T.blue} onClick={() => onEditar(uni)} />
-                  <BtnAcao icon="🗑️" title="Excluir" cor={T.red}  onClick={() => onExcluir(uni)} />
+                  <BtnAcao icon="✏️" title="Alterar" cor={T.blue} onClick={() => onEditar(u)} />
+                  <BtnAcao icon="🗑️" title="Desativar" cor={T.red} onClick={() => onExcluir(u)} />
                 </div>
               </td>
             </tr>
@@ -559,7 +573,6 @@ export default function Unidades() {
   const acao = searchParams.get('acao') || 'consultar';
 
   const [unidades, setUnidades]                   = useState([]);
-  const [empresas, setEmpresas]                   = useState([]);
   const [carregando, setCarregando]               = useState(false);
   const [salvando, setSalvando]                   = useState(false);
   const [excluindo, setExcluindo]                 = useState(false);
@@ -584,33 +597,21 @@ export default function Unidades() {
     }
   }, []);
 
-  const carregarEmpresas = useCallback(async () => {
-    try {
-      const { data } = await api.get('/opcoes/empresas');
-      setEmpresas(data.empresas || []);
-    } catch {
-      // silencia — empresas é lista auxiliar
-    }
-  }, []);
-
-  useEffect(() => {
-    carregarUnidades();
-    carregarEmpresas();
-  }, [carregarUnidades, carregarEmpresas]);
+  useEffect(() => { carregarUnidades(); }, [carregarUnidades]);
 
   const irPara = (novaAcao, unidade = null) => {
     setUnidadeEditando(unidade);
     setSearchParams({ acao: novaAcao });
   };
 
-  const handleVerDetalhes = async (uni) => {
-    setUnidadeDetalhes(uni);
+  const handleVerDetalhes = async (u) => {
+    setUnidadeDetalhes(u);
     setCarregandoDetalhes(true);
     try {
-      const { data } = await api.get(`/unidades/${uni.id}`);
+      const { data } = await api.get(`/unidades/${u.id}`);
       setUnidadeDetalhes(data);
     } catch {
-      // mantém dados parciais já carregados
+      // mantém dados parciais
     } finally {
       setCarregandoDetalhes(false);
     }
@@ -620,7 +621,7 @@ export default function Unidades() {
     setSalvando(true);
     try {
       await api.post('/unidades', payload);
-      showToast('Unidade incluída com sucesso!');
+      showToast('Unidade incluida com sucesso!');
       await carregarUnidades();
       irPara('consultar');
     } catch (err) {
@@ -654,75 +655,18 @@ export default function Unidades() {
       setUnidadeExcluindo(null);
       await carregarUnidades();
     } catch (err) {
-      showToast(err.response?.data?.error || 'Erro ao excluir unidade.', 'erro');
+      showToast(err.response?.data?.error || 'Erro ao desativar unidade.', 'erro');
     } finally {
       setExcluindo(false);
     }
   };
 
-  const handleEditarDaTabela = (uni) => {
-    setUnidadeEditando(uni);
+  const handleEditarDaTabela = (u) => {
+    setUnidadeEditando(u);
     setSearchParams({ acao: 'alterar' });
   };
 
-  // ─── Renderização por ação ────────────────────────────────────────────────
-  const renderConteudo = () => {
-    if (acao === 'incluir') {
-      return (
-        <FormularioIncluir
-          onSalvar={handleIncluir}
-          onCancelar={() => irPara('consultar')}
-          loading={salvando}
-          empresas={empresas}
-        />
-      );
-    }
-
-    if (acao === 'alterar') {
-      if (!unidadeEditando) {
-        return (
-          <div>
-            <p style={{
-              background: T.blueDim, border: '1px solid #bfdbfe',
-              borderRadius: T.radiusSm, padding: '10px 16px',
-              fontSize: 13, color: T.blue, fontFamily: T.fontBody, marginBottom: 20,
-            }}>
-              🔍 Selecione uma unidade na lista para alterar.
-            </p>
-            <TabelaComBusca />
-          </div>
-        );
-      }
-      return (
-        <FormularioAlterar
-          unidadeInicial={unidadeEditando}
-          onSalvar={handleAlterar}
-          onCancelar={() => { setUnidadeEditando(null); irPara('consultar'); }}
-          loading={salvando}
-          empresas={empresas}
-        />
-      );
-    }
-
-    if (acao === 'excluir') {
-      return (
-        <div>
-          <p style={{
-            background: '#fee2e2', border: '1px solid #fca5a5',
-            borderRadius: T.radiusSm, padding: '10px 16px',
-            fontSize: 13, color: '#b91c1c', fontFamily: T.fontBody, marginBottom: 20,
-          }}>
-            ⚠️ Selecione a unidade que deseja desativar. O registro é preservado no histórico.
-          </p>
-          <TabelaComBusca />
-        </div>
-      );
-    }
-
-    // consultar (padrão)
-    return <TabelaComBusca />;
-  };
-
+  // ─── Renderizacao por acao ────────────────────────────────────────────────
   const TabelaComBusca = () => (
     <div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -731,7 +675,7 @@ export default function Unidades() {
           <input
             value={busca}
             onChange={e => setBusca(e.target.value)}
-            placeholder="Buscar por nome, código ou empresa..."
+            placeholder="Buscar por nome ou codigo..."
             style={{
               width: '100%', padding: '8px 12px 8px 32px',
               border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm,
@@ -766,7 +710,7 @@ export default function Unidades() {
             busca={busca}
             acao={acao}
             onEditar={handleEditarDaTabela}
-            onExcluir={uni => setUnidadeExcluindo(uni)}
+            onExcluir={u => setUnidadeExcluindo(u)}
             onVerDetalhes={handleVerDetalhes}
           />
         </div>
@@ -774,7 +718,62 @@ export default function Unidades() {
     </div>
   );
 
-  // ─── Tabs de ação ─────────────────────────────────────────────────────────
+  const renderConteudo = () => {
+    if (acao === 'incluir') {
+      return (
+        <FormularioIncluir
+          onSalvar={handleIncluir}
+          onCancelar={() => irPara('consultar')}
+          loading={salvando}
+        />
+      );
+    }
+
+    if (acao === 'alterar') {
+      if (!unidadeEditando) {
+        return (
+          <div>
+            <p style={{
+              background: T.blueDim, border: '1px solid #bfdbfe',
+              borderRadius: T.radiusSm, padding: '10px 16px',
+              fontSize: 13, color: T.blue, fontFamily: T.fontBody, marginBottom: 20,
+            }}>
+              🔍 Selecione uma unidade na lista para alterar.
+            </p>
+            <TabelaComBusca />
+          </div>
+        );
+      }
+      return (
+        <FormularioAlterar
+          unidadeInicial={unidadeEditando}
+          onSalvar={handleAlterar}
+          onCancelar={() => { setUnidadeEditando(null); irPara('consultar'); }}
+          loading={salvando}
+        />
+      );
+    }
+
+    if (acao === 'excluir') {
+      return (
+        <div>
+          <p style={{
+            background: '#fee2e2', border: '1px solid #fca5a5',
+            borderRadius: T.radiusSm, padding: '10px 16px',
+            fontSize: 13, color: '#b91c1c', fontFamily: T.fontBody, marginBottom: 20,
+          }}>
+            Selecione a unidade que deseja desativar. O registro e preservado no historico.
+          </p>
+          <TabelaComBusca />
+        </div>
+      );
+    }
+
+    // consultar (padrao)
+    return <TabelaComBusca />;
+  };
+
+  // ─── Tabs de acao ──────────────────────────────────────────────────────────
   const TABS = [
     { key: 'consultar', icon: '🔍', label: 'Consultar' },
     { key: 'incluir',   icon: '➕', label: 'Incluir'   },
@@ -796,61 +795,69 @@ export default function Unidades() {
         }
       `}</style>
 
-      <NavbarMetasPro />
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        <div style={{ position: 'sticky', top: 0, zIndex: 200, flexShrink: 0 }}>
+          <NavbarMetasPro />
+        </div>
 
-      <div style={{ minHeight: 'calc(100vh - 56px)', background: T.bg, padding: '28px 24px', fontFamily: T.fontBody }}>
-        <div style={{ maxWidth: 900, margin: '0 auto' }}>
+        {/* Area fixa: cabecalho + tabs */}
+        <div style={{ background: T.bg, padding: '28px 24px 0', flexShrink: 0 }}>
+          <div style={{ maxWidth: 860, margin: '0 auto' }}>
 
-          {/* Cabeçalho */}
-          <div style={{ marginBottom: 24 }}>
-            <h1 style={{
-              fontFamily: T.fontDisplay, fontWeight: 900,
-              fontSize: 26, color: T.navy, marginBottom: 4,
-              display: 'flex', alignItems: 'center', gap: 10,
+            <div style={{ marginBottom: 24 }}>
+              <h1 style={{
+                fontFamily: T.fontDisplay, fontWeight: 900,
+                fontSize: 26, color: T.navy, marginBottom: 4,
+                display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                Unidades de Monitoramento
+              </h1>
+              <p style={{ color: T.textMd, fontSize: 13 }}>
+                Gerencie as unidades da sua empresa — inclua, altere, consulte e desative conforme necessario.
+              </p>
+            </div>
+
+            {/* Tabs de acao */}
+            <div className="tabs-acoes" style={{
+              display: 'flex', gap: 6, marginBottom: 24,
+              background: T.surface, borderRadius: T.radius,
+              border: `1px solid ${T.border}`, padding: 6,
             }}>
-              🏭 Unidades de Monitoramento
-            </h1>
-            <p style={{ color: T.textMd, fontSize: 13 }}>
-              Gerencie as unidades monitoradas — inclua, altere, consulte e desative registros.
-            </p>
-          </div>
+              {TABS.map(tab => {
+                const ativo = acao === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => { setUnidadeEditando(null); setSearchParams({ acao: tab.key }); }}
+                    className="tab-btn"
+                    style={{
+                      padding: '10px 16px',
+                      background: ativo ? T.navy : 'transparent',
+                      border: 'none', borderRadius: T.radiusSm,
+                      color: ativo ? '#fff' : T.textMd,
+                      fontSize: 13, fontWeight: ativo ? 700 : 500,
+                      cursor: 'pointer', fontFamily: T.fontBody,
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      transition: T.transition,
+                    }}
+                  >
+                    <span>{tab.icon}</span>
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
 
-          {/* Tabs de ação */}
-          <div className="tabs-acoes" style={{
-            display: 'flex', gap: 6, marginBottom: 24,
-            background: T.surface, borderRadius: T.radius,
-            border: `1px solid ${T.border}`, padding: 6,
-          }}>
-            {TABS.map(tab => {
-              const ativo = acao === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  onClick={() => { setUnidadeEditando(null); setSearchParams({ acao: tab.key }); }}
-                  className="tab-btn"
-                  style={{
-                    padding: '10px 16px',
-                    background: ativo ? T.navy : 'transparent',
-                    border: 'none', borderRadius: T.radiusSm,
-                    color: ativo ? '#fff' : T.textMd,
-                    fontSize: 13, fontWeight: ativo ? 700 : 500,
-                    cursor: 'pointer', fontFamily: T.fontBody,
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    transition: T.transition,
-                  }}
-                >
-                  <span>{tab.icon}</span>
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
           </div>
+        </div>
 
-          {/* Conteúdo da ação */}
-          <div style={{ animation: 'fadeIn 0.25s ease' }}>
-            {renderConteudo()}
+        {/* Area rolavel: conteudo da acao */}
+        <div style={{ flex: 1, overflowY: 'auto', background: T.bg, padding: '0 24px 28px' }}>
+          <div style={{ maxWidth: 860, margin: '0 auto' }}>
+            <div style={{ animation: 'fadeIn 0.25s ease', paddingTop: 4 }}>
+              {renderConteudo()}
+            </div>
           </div>
-
         </div>
       </div>
 
@@ -860,11 +867,11 @@ export default function Unidades() {
           unidade={unidadeDetalhes}
           carregando={carregandoDetalhes}
           onFechar={() => setUnidadeDetalhes(null)}
-          onEditar={(uni) => { setUnidadeDetalhes(null); handleEditarDaTabela(uni); }}
+          onEditar={(u) => { setUnidadeDetalhes(null); handleEditarDaTabela(u); }}
         />
       )}
 
-      {/* Modal de exclusão */}
+      {/* Modal de exclusao */}
       {unidadeExcluindo && (
         <ModalConfirmar
           unidade={unidadeExcluindo}
