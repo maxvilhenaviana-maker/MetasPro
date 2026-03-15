@@ -1,6 +1,9 @@
 // api/onboarding.js
 // Rotas serverless Vercel para o fluxo de onboarding
-// Gerencia criação de empresa, vínculo do admin e criação de unidade
+// Gerencia criacao de empresa, vinculo do admin e criacao de unidade
+//
+// CORRECAO: url.endsWith() falha quando a URL contem query string (?_t=...)
+// Solucao: usar url.split('?')[0] para comparar apenas o pathname
 
 const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
@@ -10,25 +13,25 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-// ─── Middleware de autenticação ───────────────────────────────────────────────
+// Middleware de autenticacao
 function autenticar(req) {
   const auth = req.headers['authorization'] || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
-  if (!token) throw new Error('Token não fornecido.');
+  if (!token) throw new Error('Token nao fornecido.');
   try {
     return jwt.verify(token, process.env.JWT_SECRET || 'secret');
   } catch {
-    throw new Error('Token inválido ou expirado.');
+    throw new Error('Token invalido ou expirado.');
   }
 }
 
-// ─── Validação de CNPJ (formato) ─────────────────────────────────────────────
+// Validacao de CNPJ (formato)
 function validarCNPJ(cnpj) {
   const digits = cnpj.replace(/\D/g, '');
   return digits.length === 14;
 }
 
-// ─── Handler principal ────────────────────────────────────────────────────────
+// Handler principal
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -36,36 +39,37 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(204).end();
 
-  const url = req.url || '';
+  // CORRECAO CRITICA: remover query string antes de comparar o path
+  // Sem isso, "/api/onboarding/status?_t=123456" nao passa no endsWith('/status')
+  const rawUrl = req.url || '';
+  const pathname = rawUrl.split('?')[0];
 
-  // ── POST /api/onboarding/empresa ─────────────────────────────────────────
-  if (req.method === 'POST' && url.endsWith('/empresa')) {
+  // POST /api/onboarding/empresa
+  if (req.method === 'POST' && pathname.endsWith('/empresa')) {
     try {
       const user = autenticar(req);
       const { cnpj, razao_social, nome_fantasia } = req.body || {};
 
       if (!cnpj || !razao_social) {
-        return res.status(400).json({ error: 'CNPJ e Razão Social são obrigatórios.' });
+        return res.status(400).json({ error: 'CNPJ e Razao Social sao obrigatorios.' });
       }
       if (!validarCNPJ(cnpj)) {
-        return res.status(400).json({ error: 'CNPJ inválido.' });
+        return res.status(400).json({ error: 'CNPJ invalido.' });
       }
 
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
 
-        // Verifica se CNPJ já existe
         const existing = await client.query(
           'SELECT id FROM empresas WHERE cnpj = $1',
           [cnpj]
         );
         if (existing.rows.length > 0) {
           await client.query('ROLLBACK');
-          return res.status(400).json({ error: 'CNPJ já cadastrado no sistema.' });
+          return res.status(400).json({ error: 'CNPJ ja cadastrado no sistema.' });
         }
 
-        // Cria a empresa
         const empResult = await client.query(
           `INSERT INTO empresas (cnpj, razao_social, nome_fantasia)
            VALUES ($1, $2, $3)
@@ -74,7 +78,6 @@ module.exports = async function handler(req, res) {
         );
         const empresa = empResult.rows[0];
 
-        // Vincula o usuário como ADMIN da empresa
         await client.query(
           `INSERT INTO empresa_usuarios (empresa_id, usuario_id, papel)
            VALUES ($1, $2, 'ADMIN')`,
@@ -100,27 +103,25 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  // ── POST /api/onboarding/unidade ──────────────────────────────────────────
-  if (req.method === 'POST' && url.endsWith('/unidade')) {
+  // POST /api/onboarding/unidade
+  if (req.method === 'POST' && pathname.endsWith('/unidade')) {
     try {
       const user = autenticar(req);
       const { empresa_id, nome_unidade, codigo_unidade } = req.body || {};
 
       if (!empresa_id || !nome_unidade) {
-        return res.status(400).json({ error: 'empresa_id e nome_unidade são obrigatórios.' });
+        return res.status(400).json({ error: 'empresa_id e nome_unidade sao obrigatorios.' });
       }
 
-      // Verifica se o usuário é ADMIN da empresa
       const perm = await pool.query(
         `SELECT papel FROM empresa_usuarios
          WHERE empresa_id = $1 AND usuario_id = $2 AND ativo = true`,
         [empresa_id, user.id]
       );
       if (perm.rows.length === 0) {
-        return res.status(403).json({ error: 'Sem permissão para esta empresa.' });
+        return res.status(403).json({ error: 'Sem permissao para esta empresa.' });
       }
 
-      // Gera código automático se não informado
       const countResult = await pool.query(
         'SELECT COUNT(*) FROM unidades_monitoradas WHERE empresa_id = $1',
         [empresa_id]
@@ -146,14 +147,14 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  // ── GET /api/onboarding/status ────────────────────────────────────────────
-  // Verifica se o usuário já completou o onboarding
-  if (req.method === 'GET' && url.endsWith('/status')) {
+  // GET /api/onboarding/status
+  // CORRECAO: comparamos pathname (sem query string) para evitar falha silenciosa
+  if (req.method === 'GET' && pathname.endsWith('/status')) {
     try {
       const user = autenticar(req);
 
       const result = await pool.query(
-        `SELECT 
+        `SELECT
            e.id        AS empresa_id,
            e.nome_fantasia,
            e.razao_social,
@@ -164,7 +165,7 @@ module.exports = async function handler(req, res) {
          JOIN empresas e ON e.id = eu.empresa_id
          LEFT JOIN unidades_monitoradas um ON um.empresa_id = e.id AND um.ativo = true
          WHERE eu.usuario_id = $1 AND eu.ativo = true
-         GROUP BY e.id, eu.papel
+         GROUP BY e.id, e.nome_fantasia, e.razao_social, e.cnpj, eu.papel
          LIMIT 1`,
         [user.id]
       );
@@ -177,12 +178,12 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({
         onboardingCompleto: true,
         empresa: {
-          id: row.empresa_id,
+          id:           row.empresa_id,
           nome_fantasia: row.nome_fantasia,
-          razao_social: row.razao_social,
-          cnpj: row.cnpj,
+          razao_social:  row.razao_social,
+          cnpj:          row.cnpj,
         },
-        papel: row.papel,
+        papel:         row.papel,
         totalUnidades: parseInt(row.total_unidades),
       });
 
@@ -195,5 +196,5 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  return res.status(404).json({ error: 'Rota não encontrada.' });
+  return res.status(404).json({ error: 'Rota nao encontrada.' });
 };
