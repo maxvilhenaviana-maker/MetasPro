@@ -16,11 +16,11 @@ const pool = new Pool({
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// ─── Middleware de autenticação JWT ───────────────────────────────────────────
+// Middleware de autenticacao JWT
 function autenticar(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Token não fornecido.' });
+    return res.status(401).json({ error: 'Token nao fornecido.' });
   }
   const token = authHeader.split(' ')[1];
   try {
@@ -28,14 +28,14 @@ function autenticar(req, res, next) {
     req.userId = decoded.id;
     next();
   } catch {
-    return res.status(401).json({ error: 'Token inválido ou expirado.' });
+    return res.status(401).json({ error: 'Token invalido ou expirado.' });
   }
 }
 
-// ─── Middleware de permissão ADMIN ────────────────────────────────────────────
-// Lê X-Empresa-Id enviado pelo frontend (via api.js interceptor).
-// Valida que o usuário logado é ADMIN nessa empresa específica.
-// Expõe req.empresaId para todos os handlers downstream.
+// Middleware de permissao ADMIN
+// Le X-Empresa-Id enviado pelo frontend (via api.js interceptor).
+// Valida que o usuario logado e ADMIN nessa empresa especifica.
+// Expoe req.empresaId para todos os handlers downstream.
 async function apenasAdmin(req, res, next) {
   try {
     const empresaId = req.headers['x-empresa-id'];
@@ -58,20 +58,20 @@ async function apenasAdmin(req, res, next) {
       return res.status(403).json({ error: 'Acesso restrito a administradores desta empresa.' });
     }
 
-    req.empresaId = empresaId; // disponível em todos os handlers
+    req.empresaId = empresaId;
     next();
   } catch (err) {
     console.error('[apenasAdmin]', err.message);
-    res.status(500).json({ error: 'Erro ao verificar permissões.' });
+    res.status(500).json({ error: 'Erro ao verificar permissoes.' });
   }
 }
 
-// ─── Rota de Teste ────────────────────────────────────────────────────────────
+// Rota de Teste
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'MetasPro API está operando' });
+  res.json({ status: 'MetasPro API esta operando' });
 });
 
-// ─── AUTENTICAÇÃO ─────────────────────────────────────────────────────────────
+// ─── AUTENTICACAO ─────────────────────────────────────────────────────────────
 
 app.post('/api/auth/register', async (req, res) => {
   const { name, nome, email, password, senha } = req.body;
@@ -79,7 +79,7 @@ app.post('/api/auth/register', async (req, res) => {
   const senhaRecebida = senha || password;
   try {
     const userExists = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
-    if (userExists.rows.length > 0) return res.status(400).json({ error: 'E-mail já cadastrado.' });
+    if (userExists.rows.length > 0) return res.status(400).json({ error: 'E-mail ja cadastrado.' });
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(senhaRecebida, salt);
@@ -102,13 +102,13 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
     const user = result.rows[0];
-    if (!user) return res.status(401).json({ error: 'Credenciais inválidas' });
-    if (user.ativo === false) return res.status(403).json({ error: 'Usuário inativo. Entre em contato com o administrador.' });
+    if (!user) return res.status(401).json({ error: 'Credenciais invalidas' });
+    if (user.ativo === false) return res.status(403).json({ error: 'Usuario inativo. Entre em contato com o administrador.' });
 
     const hashArmazenado = user.senha_hash || user.password;
-    if (!hashArmazenado || !senhaRecebida) return res.status(401).json({ error: 'Credenciais inválidas' });
+    if (!hashArmazenado || !senhaRecebida) return res.status(401).json({ error: 'Credenciais invalidas' });
     const validPassword = await bcrypt.compare(senhaRecebida, hashArmazenado);
-    if (!validPassword) return res.status(401).json({ error: 'Credenciais inválidas' });
+    if (!validPassword) return res.status(401).json({ error: 'Credenciais invalidas' });
 
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET || 'secret', { expiresIn: '8h' });
     return res.json({ token, user: { id: user.id, nome: user.nome, email: user.email } });
@@ -129,7 +129,7 @@ app.post('/api/auth/google', async (req, res) => {
 
     let result = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
     let user = result.rows[0];
-    if (user && user.ativo === false) return res.status(403).json({ error: 'Usuário inativo. Entre em contato com o administrador.' });
+    if (user && user.ativo === false) return res.status(403).json({ error: 'Usuario inativo. Entre em contato com o administrador.' });
 
     if (!user) {
       const insertResult = await pool.query(
@@ -143,13 +143,13 @@ app.post('/api/auth/google', async (req, res) => {
     res.json({ token, user: { id: user.id, nome: user.nome, email: user.email } });
   } catch (error) {
     console.error('Erro Google auth:', error);
-    res.status(401).json({ error: 'Falha na autenticação com o Google.' });
+    res.status(401).json({ error: 'Falha na autenticacao com o Google.' });
   }
 });
 
-// ─── ROTAS DE OPÇÕES (listas para formulários) ────────────────────────────────
+// ─── ROTAS DE OPCOES (listas para formularios) ────────────────────────────────
 
-// GET /api/opcoes/empresas — lista todas as empresas ativas (para o admin escolher)
+// GET /api/opcoes/empresas
 app.get('/api/opcoes/empresas', autenticar, apenasAdmin, async (req, res) => {
   try {
     const result = await pool.query(
@@ -165,11 +165,11 @@ app.get('/api/opcoes/empresas', autenticar, apenasAdmin, async (req, res) => {
   }
 });
 
-// GET /api/opcoes/unidades?empresa_id=xxx — lista unidades ativas de uma empresa
+// GET /api/opcoes/unidades?empresa_id=xxx
 app.get('/api/opcoes/unidades', autenticar, apenasAdmin, async (req, res) => {
   const { empresa_id } = req.query;
   if (!empresa_id) {
-    return res.status(400).json({ error: 'Parâmetro empresa_id obrigatório.' });
+    return res.status(400).json({ error: 'Parametro empresa_id obrigatorio.' });
   }
   try {
     const result = await pool.query(
@@ -186,12 +186,12 @@ app.get('/api/opcoes/unidades', autenticar, apenasAdmin, async (req, res) => {
   }
 });
 
-// ─── CRUD DE USUÁRIOS ─────────────────────────────────────────────────────────
+// ─── CRUD DE USUARIOS ─────────────────────────────────────────────────────────
 
-// GET /api/usuarios — lista todos os usuários da empresa do admin logado
+// GET /api/usuarios
 app.get('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
   try {
-    const empresaId = req.empresaId; // definido por apenasAdmin via X-Empresa-Id
+    const empresaId = req.empresaId;
 
     const result = await pool.query(
       `SELECT
@@ -213,12 +213,12 @@ app.get('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
     );
     res.json({ usuarios: result.rows, empresaId });
   } catch (err) {
-    console.error('Erro ao listar usuários:', err.message);
-    res.status(500).json({ error: 'Erro ao buscar usuários.', detalhe: err.message });
+    console.error('Erro ao listar usuarios:', err.message);
+    res.status(500).json({ error: 'Erro ao buscar usuarios.', detalhe: err.message });
   }
 });
 
-// GET /api/usuarios/me/perfil — perfil do usuário logado
+// GET /api/usuarios/me/perfil
 app.get('/api/usuarios/me/perfil', autenticar, async (req, res) => {
   try {
     const result = await pool.query(
@@ -232,7 +232,7 @@ app.get('/api/usuarios/me/perfil', autenticar, async (req, res) => {
        LIMIT 1`,
       [req.userId]
     );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado.' });
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Usuario nao encontrado.' });
     res.json(result.rows[0]);
   } catch (err) {
     console.error('Erro ao buscar perfil:', err);
@@ -240,11 +240,11 @@ app.get('/api/usuarios/me/perfil', autenticar, async (req, res) => {
   }
 });
 
-// GET /api/usuarios/:id — detalhe de um usuário com suas unidades vinculadas
+// GET /api/usuarios/:id
 app.get('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
   const { id } = req.params;
   try {
-    const empresaId = req.empresaId; // definido por apenasAdmin via X-Empresa-Id
+    const empresaId = req.empresaId;
 
     const result = await pool.query(
       `SELECT
@@ -268,11 +268,10 @@ app.get('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
        WHERE eu.empresa_id = $1 AND u.id = $2`,
       [empresaId, id]
     );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado.' });
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Usuario nao encontrado.' });
 
     const usuario = result.rows[0];
 
-    // Unidades que o usuário tem acesso (via usuario_unidades)
     const unidadesVinculadas = await pool.query(
       `SELECT um.id, um.nome_unidade, um.codigo_unidade
        FROM usuario_unidades uu
@@ -285,48 +284,42 @@ app.get('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
 
     res.json(usuario);
   } catch (err) {
-    console.error('Erro ao buscar usuário:', err);
-    res.status(500).json({ error: 'Erro ao buscar usuário.' });
+    console.error('Erro ao buscar usuario:', err);
+    res.status(500).json({ error: 'Erro ao buscar usuario.' });
   }
 });
 
-// POST /api/usuarios — cria novo usuário, vincula à empresa escolhida e às unidades selecionadas
+// POST /api/usuarios
 app.post('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
   const { nome, email, senha, papel, empresa_id, unidades } = req.body;
-  // unidades: array de UUIDs das unidades selecionadas (pode ser vazio)
 
   if (!nome || !email || !senha || !papel || !empresa_id) {
-    return res.status(400).json({ error: 'Campos obrigatórios: nome, email, senha, papel, empresa_id.' });
+    return res.status(400).json({ error: 'Campos obrigatorios: nome, email, senha, papel, empresa_id.' });
   }
   const papeisValidos = ['ADMIN', 'DESIGNADO_CONFIGURADOR', 'DESIGNADO_LANCADOR'];
   if (!papeisValidos.includes(papel)) {
-    return res.status(400).json({ error: `Papel inválido. Use: ${papeisValidos.join(', ')}` });
+    return res.status(400).json({ error: `Papel invalido. Use: ${papeisValidos.join(', ')}` });
   }
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // Verifica se e-mail já existe
     const emailCheck = await client.query('SELECT id FROM usuarios WHERE email = $1', [email]);
     if (emailCheck.rows.length > 0) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'E-mail já cadastrado no sistema.' });
+      return res.status(400).json({ error: 'E-mail ja cadastrado no sistema.' });
     }
 
-    // Verifica se a empresa_id recebida é válida e ativa
     const empresaCheck = await client.query(
       `SELECT id FROM empresas WHERE id = $1 AND ativo = true`,
       [empresa_id]
     );
     if (empresaCheck.rows.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Empresa não encontrada ou inativa.' });
+      return res.status(400).json({ error: 'Empresa nao encontrada ou inativa.' });
     }
 
-    // Cria o usuário
-    // A tabela possui DUAS colunas de senha: "password" (NOT NULL, legada)
-    // e "senha_hash" (atual). Ambas precisam ser preenchidas com o mesmo hash.
     const salt = await bcrypt.genSalt(10);
     const senhaHash = await bcrypt.hash(senha, salt);
     const novoUser = await client.query(
@@ -337,17 +330,14 @@ app.post('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
     );
     const novoId = novoUser.rows[0].id;
 
-    // Vincula o usuário à empresa escolhida com o papel definido
     await client.query(
       `INSERT INTO empresa_usuarios (empresa_id, usuario_id, papel, ativo)
        VALUES ($1, $2, $3, true)`,
       [empresa_id, novoId, papel]
     );
 
-    // Vincula o usuário às unidades selecionadas (se houver)
     if (Array.isArray(unidades) && unidades.length > 0) {
       for (const unidade_id of unidades) {
-        // Verifica se a unidade pertence à empresa escolhida antes de vincular
         const unidadeCheck = await client.query(
           `SELECT id FROM unidades_monitoradas WHERE id = $1 AND empresa_id = $2 AND ativo = true`,
           [unidade_id, empresa_id]
@@ -367,14 +357,14 @@ app.post('/api/usuarios', autenticar, apenasAdmin, async (req, res) => {
     res.status(201).json({ ...novoUser.rows[0], papel, empresa_id });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('Erro ao criar usuário:', err);
-    res.status(500).json({ error: err.message || 'Erro ao criar usuário.' });
+    console.error('Erro ao criar usuario:', err);
+    res.status(500).json({ error: err.message || 'Erro ao criar usuario.' });
   } finally {
     client.release();
   }
 });
 
-// PUT /api/usuarios/:id — atualiza dados, papel e unidades do usuário
+// PUT /api/usuarios/:id
 app.put('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
   const { id } = req.params;
   const { nome, email, papel, ativo, novaSenha, unidades } = req.body;
@@ -382,9 +372,8 @@ app.put('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const empresaId = req.empresaId; // definido por apenasAdmin via X-Empresa-Id
+    const empresaId = req.empresaId;
 
-    // Confirma que o usuário pertence a esta empresa
     const pertenceCheck = await client.query(
       `SELECT u.id FROM usuarios u
        INNER JOIN empresa_usuarios eu ON eu.usuario_id = u.id
@@ -393,10 +382,9 @@ app.put('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
     );
     if (pertenceCheck.rows.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Usuário não encontrado nesta empresa.' });
+      return res.status(404).json({ error: 'Usuario nao encontrado nesta empresa.' });
     }
 
-    // Monta o UPDATE dinâmico apenas com os campos fornecidos
     const campos = [];
     const valores = [];
     let idx = 1;
@@ -421,29 +409,25 @@ app.put('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
 
     if (papel) {
       const papeisValidos = ['ADMIN', 'DESIGNADO_CONFIGURADOR', 'DESIGNADO_LANCADOR'];
-      if (!papeisValidos.includes(papel)) throw new Error('Papel inválido.');
+      if (!papeisValidos.includes(papel)) throw new Error('Papel invalido.');
       await client.query(
         `UPDATE empresa_usuarios SET papel = $1 WHERE empresa_id = $2 AND usuario_id = $3`,
         [papel, empresaId, id]
       );
     }
 
-    // Sincroniza unidades: se o array foi enviado, substitui os vínculos atuais
     if (Array.isArray(unidades)) {
-      // Descobre a empresa do usuário para validar as unidades
       const empresaUsuarioRes = await client.query(
         `SELECT empresa_id FROM empresa_usuarios WHERE usuario_id = $1 AND ativo = true LIMIT 1`,
         [id]
       );
       const empresaUsuarioId = empresaUsuarioRes.rows[0]?.empresa_id || empresaId;
 
-      // Desativa todos os vínculos atuais
       await client.query(
         `UPDATE usuario_unidades SET ativo = false WHERE usuario_id = $1`,
         [id]
       );
 
-      // Reativa ou insere os vínculos selecionados
       for (const unidade_id of unidades) {
         const unidadeCheck = await client.query(
           `SELECT id FROM unidades_monitoradas WHERE id = $1 AND empresa_id = $2 AND ativo = true`,
@@ -462,7 +446,6 @@ app.put('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
 
     await client.query('COMMIT');
 
-    // Retorna o usuário atualizado
     const updated = await pool.query(
       `SELECT u.id, u.nome, u.email, u.ativo, u.data_cadastro, u.created_at, eu.papel
        FROM usuarios u
@@ -473,27 +456,26 @@ app.put('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
     res.json(updated.rows[0]);
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('Erro ao atualizar usuário:', err);
-    res.status(500).json({ error: err.message || 'Erro ao atualizar usuário.' });
+    console.error('Erro ao atualizar usuario:', err);
+    res.status(500).json({ error: err.message || 'Erro ao atualizar usuario.' });
   } finally {
     client.release();
   }
 });
 
-// DELETE /api/usuarios/:id — desativa (soft delete) o usuário na empresa
+// DELETE /api/usuarios/:id
 app.delete('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
   const { id } = req.params;
 
   if (parseInt(id) === req.userId) {
-    return res.status(400).json({ error: 'Você não pode excluir seu próprio usuário.' });
+    return res.status(400).json({ error: 'Voce nao pode excluir seu proprio usuario.' });
   }
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const empresaId = req.empresaId; // definido por apenasAdmin via X-Empresa-Id
+    const empresaId = req.empresaId;
 
-    // Desativa o vínculo empresa_usuarios
     const result = await client.query(
       `UPDATE empresa_usuarios SET ativo = false
        WHERE empresa_id = $1 AND usuario_id = $2
@@ -502,35 +484,30 @@ app.delete('/api/usuarios/:id', autenticar, apenasAdmin, async (req, res) => {
     );
     if (result.rows.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Usuário não encontrado nesta empresa.' });
+      return res.status(404).json({ error: 'Usuario nao encontrado nesta empresa.' });
     }
 
-    // Desativa todos os vínculos de unidade do usuário
     await client.query(
       `UPDATE usuario_unidades SET ativo = false WHERE usuario_id = $1`,
       [id]
     );
 
-    // Desativa o usuário
     await client.query(`UPDATE usuarios SET ativo = false WHERE id = $1`, [id]);
 
     await client.query('COMMIT');
-    res.json({ mensagem: 'Usuário desativado com sucesso.', id: parseInt(id) });
+    res.json({ mensagem: 'Usuario desativado com sucesso.', id: parseInt(id) });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('Erro ao excluir usuário:', err);
-    res.status(500).json({ error: err.message || 'Erro ao excluir usuário.' });
+    console.error('Erro ao excluir usuario:', err);
+    res.status(500).json({ error: err.message || 'Erro ao excluir usuario.' });
   } finally {
     client.release();
   }
 });
 
-// ─── ROTAS DE SESSÃO ─────────────────────────────────────────────────────────
-// Usadas pelo frontend imediatamente após o login para determinar
-// em qual empresa/unidade o usuário vai atuar na sessão.
+// ─── ROTAS DE SESSAO ──────────────────────────────────────────────────────────
 
-// GET /api/session/empresas — lista todas as empresas ativas do usuário logado
-// Retorna o papel em cada empresa para exibição no ModalSelecionarEmpresa.
+// GET /api/session/empresas
 app.get('/api/session/empresas', autenticar, async (req, res) => {
   try {
     const result = await pool.query(
@@ -551,21 +528,20 @@ app.get('/api/session/empresas', autenticar, async (req, res) => {
     res.json({ empresas: result.rows });
   } catch (err) {
     console.error('[session/empresas]', err.message);
-    res.status(500).json({ error: 'Erro ao buscar empresas da sessão.' });
+    res.status(500).json({ error: 'Erro ao buscar empresas da sessao.' });
   }
 });
 
-// GET /api/session/unidades?empresa_id=xxx — lista unidades ativas da empresa
-// que o usuário tem acesso (via usuario_unidades).
-// Se o usuário for ADMIN da empresa, retorna TODAS as unidades da empresa.
+// GET /api/session/unidades?empresa_id=xxx
+// CORRECAO: adicionado try/catch explicito no bloco de leitura do papel
+// para garantir que sempre retorna status HTTP mesmo em caso de erro SQL.
 app.get('/api/session/unidades', autenticar, async (req, res) => {
   const { empresa_id } = req.query;
   if (!empresa_id) {
-    return res.status(400).json({ error: 'Parâmetro empresa_id é obrigatório.' });
+    return res.status(400).json({ error: 'Parametro empresa_id e obrigatorio.' });
   }
 
   try {
-    // Verifica se o usuário pertence a esta empresa e descobre seu papel
     const papelRes = await pool.query(
       `SELECT papel FROM empresa_usuarios
        WHERE usuario_id = $1 AND empresa_id = $2 AND ativo = true
@@ -578,11 +554,9 @@ app.get('/api/session/unidades', autenticar, async (req, res) => {
     }
 
     const papel = papelRes.rows[0].papel;
-
     let unidades;
 
     if (papel === 'ADMIN') {
-      // ADMIN vê todas as unidades ativas da empresa
       unidades = await pool.query(
         `SELECT id, nome_unidade, codigo_unidade
          FROM unidades_monitoradas
@@ -591,7 +565,6 @@ app.get('/api/session/unidades', autenticar, async (req, res) => {
         [empresa_id]
       );
     } else {
-      // Usuários designados veem apenas as unidades vinculadas a eles
       unidades = await pool.query(
         `SELECT um.id, um.nome_unidade, um.codigo_unidade
          FROM usuario_unidades uu
@@ -605,17 +578,16 @@ app.get('/api/session/unidades', autenticar, async (req, res) => {
       );
     }
 
-    res.json({ unidades: unidades.rows });
+    return res.json({ unidades: unidades.rows });
   } catch (err) {
     console.error('[session/unidades]', err.message);
-    res.status(500).json({ error: 'Erro ao buscar unidades da sessão.' });
+    return res.status(500).json({ error: 'Erro ao buscar unidades da sessao.' });
   }
 });
 
-
 // ─── CRUD DE EMPRESAS ─────────────────────────────────────────────────────────
 
-// GET /api/empresas — lista todas as empresas
+// GET /api/empresas
 app.get('/api/empresas', autenticar, apenasAdmin, async (req, res) => {
   try {
     const result = await pool.query(
@@ -630,7 +602,7 @@ app.get('/api/empresas', autenticar, apenasAdmin, async (req, res) => {
   }
 });
 
-// GET /api/empresas/:id — detalhe com unidades e usuários vinculados
+// GET /api/empresas/:id
 app.get('/api/empresas/:id', autenticar, apenasAdmin, async (req, res) => {
   const { id } = req.params;
   try {
@@ -640,7 +612,7 @@ app.get('/api/empresas/:id', autenticar, apenasAdmin, async (req, res) => {
       [id]
     );
     if (empresaRes.rows.length === 0) {
-      return res.status(404).json({ error: 'Empresa não encontrada.' });
+      return res.status(404).json({ error: 'Empresa nao encontrada.' });
     }
     const empresa = empresaRes.rows[0];
 
@@ -670,17 +642,17 @@ app.get('/api/empresas/:id', autenticar, apenasAdmin, async (req, res) => {
   }
 });
 
-// POST /api/empresas — cria nova empresa
+// POST /api/empresas
 app.post('/api/empresas', autenticar, apenasAdmin, async (req, res) => {
   const { razao_social, nome_fantasia, cnpj } = req.body;
 
   if (!razao_social || !cnpj) {
-    return res.status(400).json({ error: 'Campos obrigatórios: razao_social, cnpj.' });
+    return res.status(400).json({ error: 'Campos obrigatorios: razao_social, cnpj.' });
   }
 
   const cnpjDigits = cnpj.replace(/\D/g, '');
   if (cnpjDigits.length !== 14) {
-    return res.status(400).json({ error: 'CNPJ inválido. Informe 14 dígitos.' });
+    return res.status(400).json({ error: 'CNPJ invalido. Informe 14 digitos.' });
   }
 
   const client = await pool.connect();
@@ -693,7 +665,7 @@ app.post('/api/empresas', autenticar, apenasAdmin, async (req, res) => {
     );
     if (cnpjCheck.rows.length > 0) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'CNPJ já cadastrado no sistema.' });
+      return res.status(400).json({ error: 'CNPJ ja cadastrado no sistema.' });
     }
 
     const result = await client.query(
@@ -705,7 +677,7 @@ app.post('/api/empresas', autenticar, apenasAdmin, async (req, res) => {
 
     const novaEmpresaId = result.rows[0].id;
 
-    // ── Auto-vincular Max (desenvolvedor) como ADMIN em toda nova empresa ──────
+    // Auto-vincular Max (desenvolvedor) como ADMIN em toda nova empresa
     const maxUser = await client.query(
       `SELECT id FROM usuarios WHERE email = 'maxvilhenaviana@gmail.com' LIMIT 1`
     );
@@ -717,7 +689,6 @@ app.post('/api/empresas', autenticar, apenasAdmin, async (req, res) => {
         [novaEmpresaId, maxUser.rows[0].id]
       );
     }
-    // ─────────────────────────────────────────────────────────────────────────
 
     await client.query('COMMIT');
     res.status(201).json(result.rows[0]);
@@ -730,18 +701,18 @@ app.post('/api/empresas', autenticar, apenasAdmin, async (req, res) => {
   }
 });
 
-// PUT /api/empresas/:id — atualiza dados da empresa
+// PUT /api/empresas/:id
 app.put('/api/empresas/:id', autenticar, apenasAdmin, async (req, res) => {
   const { id } = req.params;
   const { razao_social, nome_fantasia, cnpj, ativo } = req.body;
 
   if (!razao_social || !cnpj) {
-    return res.status(400).json({ error: 'Campos obrigatórios: razao_social, cnpj.' });
+    return res.status(400).json({ error: 'Campos obrigatorios: razao_social, cnpj.' });
   }
 
   const cnpjDigits = cnpj.replace(/\D/g, '');
   if (cnpjDigits.length !== 14) {
-    return res.status(400).json({ error: 'CNPJ inválido. Informe 14 dígitos.' });
+    return res.status(400).json({ error: 'CNPJ invalido. Informe 14 digitos.' });
   }
 
   const client = await pool.connect();
@@ -753,7 +724,7 @@ app.put('/api/empresas/:id', autenticar, apenasAdmin, async (req, res) => {
     );
     if (empresaCheck.rows.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Empresa não encontrada.' });
+      return res.status(404).json({ error: 'Empresa nao encontrada.' });
     }
 
     const cnpjCheck = await client.query(
@@ -762,7 +733,7 @@ app.put('/api/empresas/:id', autenticar, apenasAdmin, async (req, res) => {
     );
     if (cnpjCheck.rows.length > 0) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'CNPJ já pertence a outra empresa.' });
+      return res.status(400).json({ error: 'CNPJ ja pertence a outra empresa.' });
     }
 
     const campos = [`razao_social = $1`, `nome_fantasia = $2`, `cnpj = $3`];
@@ -795,7 +766,7 @@ app.put('/api/empresas/:id', autenticar, apenasAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/empresas/:id — desativa (soft delete) a empresa
+// DELETE /api/empresas/:id (soft delete)
 app.delete('/api/empresas/:id', autenticar, apenasAdmin, async (req, res) => {
   const { id } = req.params;
 
@@ -809,15 +780,288 @@ app.delete('/api/empresas/:id', autenticar, apenasAdmin, async (req, res) => {
     );
     if (result.rows.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Empresa não encontrada.' });
+      return res.status(404).json({ error: 'Empresa nao encontrada.' });
     }
 
     await client.query('COMMIT');
-    res.json({ mensagem: 'Empresa desativada com sucesso.', id: parseInt(id) });
+    res.json({ mensagem: 'Empresa desativada com sucesso.', id });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('[DELETE /empresas/:id]', err.message);
     res.status(500).json({ error: err.message || 'Erro ao desativar empresa.' });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── CRUD DE UNIDADES DE MONITORAMENTO ───────────────────────────────────────
+// Tabela: unidades_monitoradas
+// Campos: id (uuid), empresa_id (uuid FK empresas), nome_unidade (varchar 255),
+//         codigo_unidade (varchar 50), ativo (boolean), criado_em (timestamptz)
+
+// GET /api/unidades — lista todas as unidades da empresa do admin logado
+app.get('/api/unidades', autenticar, apenasAdmin, async (req, res) => {
+  try {
+    const empresaId = req.empresaId;
+
+    const result = await pool.query(
+      `SELECT
+         um.id,
+         um.nome_unidade,
+         um.codigo_unidade,
+         um.ativo,
+         um.criado_em,
+         e.nome_fantasia AS empresa_nome,
+         e.razao_social  AS empresa_razao,
+         (
+           SELECT COUNT(*)
+           FROM usuario_unidades uu
+           WHERE uu.unidade_id = um.id AND uu.ativo = true
+         ) AS total_usuarios
+       FROM unidades_monitoradas um
+       INNER JOIN empresas e ON e.id = um.empresa_id
+       WHERE um.empresa_id = $1
+       ORDER BY um.nome_unidade ASC`,
+      [empresaId]
+    );
+
+    res.json({ unidades: result.rows, empresaId });
+  } catch (err) {
+    console.error('[GET /unidades]', err.message);
+    res.status(500).json({ error: 'Erro ao buscar unidades.', detalhe: err.message });
+  }
+});
+
+// GET /api/unidades/:id — detalhe de uma unidade com usuarios vinculados
+app.get('/api/unidades/:id', autenticar, apenasAdmin, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const empresaId = req.empresaId;
+
+    const unidadeRes = await pool.query(
+      `SELECT
+         um.id,
+         um.nome_unidade,
+         um.codigo_unidade,
+         um.ativo,
+         um.criado_em,
+         e.id           AS empresa_id,
+         e.nome_fantasia,
+         e.razao_social,
+         e.cnpj
+       FROM unidades_monitoradas um
+       INNER JOIN empresas e ON e.id = um.empresa_id
+       WHERE um.id = $1 AND um.empresa_id = $2`,
+      [id, empresaId]
+    );
+
+    if (unidadeRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Unidade nao encontrada.' });
+    }
+
+    const unidade = unidadeRes.rows[0];
+
+    // Usuarios vinculados a esta unidade
+    const usuariosRes = await pool.query(
+      `SELECT u.id, u.nome, u.email, eu.papel, uu.ativo AS vinculo_ativo
+       FROM usuario_unidades uu
+       INNER JOIN usuarios u ON u.id = uu.usuario_id
+       INNER JOIN empresa_usuarios eu ON eu.usuario_id = u.id AND eu.empresa_id = $2
+       WHERE uu.unidade_id = $1
+       ORDER BY u.nome ASC`,
+      [id, empresaId]
+    );
+    unidade.usuarios = usuariosRes.rows;
+
+    res.json(unidade);
+  } catch (err) {
+    console.error('[GET /unidades/:id]', err.message);
+    res.status(500).json({ error: 'Erro ao buscar unidade.', detalhe: err.message });
+  }
+});
+
+// POST /api/unidades — cria nova unidade na empresa do admin logado
+app.post('/api/unidades', autenticar, apenasAdmin, async (req, res) => {
+  const { nome_unidade, codigo_unidade } = req.body;
+  const empresaId = req.empresaId;
+
+  if (!nome_unidade || !nome_unidade.trim()) {
+    return res.status(400).json({ error: 'Campo obrigatorio: nome_unidade.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Verifica se ja existe unidade com mesmo nome nesta empresa
+    const nomeCheck = await client.query(
+      `SELECT id FROM unidades_monitoradas
+       WHERE empresa_id = $1 AND LOWER(nome_unidade) = LOWER($2) AND ativo = true`,
+      [empresaId, nome_unidade.trim()]
+    );
+    if (nomeCheck.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Ja existe uma unidade ativa com este nome nesta empresa.' });
+    }
+
+    // Gera codigo automatico se nao informado
+    let codigoFinal = codigo_unidade ? codigo_unidade.trim() : null;
+    if (!codigoFinal) {
+      const countRes = await client.query(
+        `SELECT COUNT(*) FROM unidades_monitoradas WHERE empresa_id = $1`,
+        [empresaId]
+      );
+      const seq = String(parseInt(countRes.rows[0].count) + 1).padStart(2, '0');
+      codigoFinal = `UN-${seq}`;
+    }
+
+    // Verifica unicidade do codigo dentro da empresa
+    if (codigo_unidade) {
+      const codigoCheck = await client.query(
+        `SELECT id FROM unidades_monitoradas
+         WHERE empresa_id = $1 AND LOWER(codigo_unidade) = LOWER($2) AND ativo = true`,
+        [empresaId, codigoFinal]
+      );
+      if (codigoCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Ja existe uma unidade com este codigo nesta empresa.' });
+      }
+    }
+
+    const result = await client.query(
+      `INSERT INTO unidades_monitoradas (empresa_id, nome_unidade, codigo_unidade, ativo)
+       VALUES ($1, $2, $3, true)
+       RETURNING id, empresa_id, nome_unidade, codigo_unidade, ativo, criado_em`,
+      [empresaId, nome_unidade.trim(), codigoFinal]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[POST /unidades]', err.message);
+    res.status(500).json({ error: err.message || 'Erro ao criar unidade.' });
+  } finally {
+    client.release();
+  }
+});
+
+// PUT /api/unidades/:id — atualiza nome, codigo e status da unidade
+app.put('/api/unidades/:id', autenticar, apenasAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { nome_unidade, codigo_unidade, ativo } = req.body;
+  const empresaId = req.empresaId;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Confirma que a unidade pertence a esta empresa
+    const unidadeCheck = await client.query(
+      `SELECT id FROM unidades_monitoradas WHERE id = $1 AND empresa_id = $2`,
+      [id, empresaId]
+    );
+    if (unidadeCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Unidade nao encontrada nesta empresa.' });
+    }
+
+    // Verifica duplicidade de nome (excluindo o proprio registro)
+    if (nome_unidade) {
+      const nomeCheck = await client.query(
+        `SELECT id FROM unidades_monitoradas
+         WHERE empresa_id = $1 AND LOWER(nome_unidade) = LOWER($2) AND id != $3 AND ativo = true`,
+        [empresaId, nome_unidade.trim(), id]
+      );
+      if (nomeCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Ja existe outra unidade ativa com este nome.' });
+      }
+    }
+
+    // Verifica duplicidade de codigo (excluindo o proprio registro)
+    if (codigo_unidade) {
+      const codigoCheck = await client.query(
+        `SELECT id FROM unidades_monitoradas
+         WHERE empresa_id = $1 AND LOWER(codigo_unidade) = LOWER($2) AND id != $3 AND ativo = true`,
+        [empresaId, codigo_unidade.trim(), id]
+      );
+      if (codigoCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Ja existe outra unidade com este codigo.' });
+      }
+    }
+
+    const campos = [];
+    const valores = [];
+    let idx = 1;
+
+    if (nome_unidade)    { campos.push(`nome_unidade = $${idx++}`);    valores.push(nome_unidade.trim()); }
+    if (codigo_unidade)  { campos.push(`codigo_unidade = $${idx++}`);  valores.push(codigo_unidade.trim()); }
+    if (typeof ativo === 'boolean') { campos.push(`ativo = $${idx++}`); valores.push(ativo); }
+
+    if (campos.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Nenhum campo para atualizar.' });
+    }
+
+    valores.push(id);
+    const result = await client.query(
+      `UPDATE unidades_monitoradas
+       SET ${campos.join(', ')}
+       WHERE id = $${idx}
+       RETURNING id, empresa_id, nome_unidade, codigo_unidade, ativo, criado_em`,
+      valores
+    );
+
+    await client.query('COMMIT');
+    res.json(result.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[PUT /unidades/:id]', err.message);
+    res.status(500).json({ error: err.message || 'Erro ao atualizar unidade.' });
+  } finally {
+    client.release();
+  }
+});
+
+// DELETE /api/unidades/:id — desativa (soft delete) a unidade
+app.delete('/api/unidades/:id', autenticar, apenasAdmin, async (req, res) => {
+  const { id } = req.params;
+  const empresaId = req.empresaId;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Confirma que pertence a esta empresa
+    const unidadeCheck = await client.query(
+      `SELECT id FROM unidades_monitoradas WHERE id = $1 AND empresa_id = $2`,
+      [id, empresaId]
+    );
+    if (unidadeCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Unidade nao encontrada nesta empresa.' });
+    }
+
+    // Desativa a unidade
+    await client.query(
+      `UPDATE unidades_monitoradas SET ativo = false WHERE id = $1`,
+      [id]
+    );
+
+    // Desativa todos os vinculos de usuarios com esta unidade
+    await client.query(
+      `UPDATE usuario_unidades SET ativo = false WHERE unidade_id = $1`,
+      [id]
+    );
+
+    await client.query('COMMIT');
+    res.json({ mensagem: 'Unidade desativada com sucesso.', id });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[DELETE /unidades/:id]', err.message);
+    res.status(500).json({ error: err.message || 'Erro ao desativar unidade.' });
   } finally {
     client.release();
   }
