@@ -1,7 +1,6 @@
 // src/App.jsx
 // Roteamento principal — MetasPro
-// ATUALIZADO: SessionProvider envolve toda a aplicação para gestão
-//             de empresa ativa, papel e unidade de monitoramento.
+// ATUALIZADO: rota /unidades agora aponta para o modulo real (CRUD completo).
 
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
@@ -17,7 +16,7 @@ import Unidades    from './pages/Unidades';
 import { SessionProvider } from './contexts/SessionContext';
 import api from './services/api';
 
-// ─── Extrai token (suporta { token } e { accessToken }) ───────────────────────
+// Extrai token (suporta { token } e { accessToken })
 function getToken() {
   try {
     const raw = localStorage.getItem('auth_tokens');
@@ -27,7 +26,7 @@ function getToken() {
   } catch { return null; }
 }
 
-// ─── Tela de carregamento ─────────────────────────────────────────────────────
+// Tela de carregamento
 function LoadingScreen() {
   return (
     <div style={{
@@ -52,11 +51,11 @@ function LoadingScreen() {
   );
 }
 
-// ─── Rota privada simples ─────────────────────────────────────────────────────
+// Rota privada simples
 const PrivateRoute = ({ children }) =>
   getToken() ? children : <Navigate to="/login" />;
 
-// ─── Rota privada com verificação de onboarding ───────────────────────────────
+// Rota privada com verificacao de onboarding
 const PrivateRouteWithOnboarding = ({ children }) => {
   const [checking, setChecking] = useState(true);
   const [redirect, setRedirect] = useState(null);
@@ -85,65 +84,71 @@ const PrivateRouteWithOnboarding = ({ children }) => {
   return children;
 };
 
-// ─── App Principal ────────────────────────────────────────────────────────────
+// App Principal
 export default function App() {
   return (
-    // SessionProvider envolve tudo para que empresa/unidade fiquem
-    // acessíveis em qualquer página via useSession()
     <SessionProvider>
       <Router>
         <Routes>
 
-          {/* ── Rotas públicas ───────────────────────────────────────────── */}
+          {/* Rotas publicas */}
           <Route path="/login"   element={<Login />} />
           <Route path="/sandbox" element={<GoalSandbox />} />
 
-          {/* ── Onboarding ───────────────────────────────────────────────── */}
+          {/* Onboarding */}
           <Route path="/onboarding" element={
             <PrivateRoute><Onboarding /></PrivateRoute>
           } />
 
-          {/* ── TELA INICIAL ─────────────────────────────────────────────── */}
+          {/* Tela Inicial */}
           <Route path="/inicial" element={
             <PrivateRouteWithOnboarding><Inicial /></PrivateRouteWithOnboarding>
           } />
 
-          {/* ── Dashboard ────────────────────────────────────────────────── */}
+          {/* Dashboard */}
           <Route path="/dashboard" element={
             <PrivateRouteWithOnboarding><Dashboard /></PrivateRouteWithOnboarding>
           } />
 
-          {/* ── Wizard de Nova Meta ───────────────────────────────────────── */}
+          {/* Wizard de Nova Meta */}
           <Route path="/nova-meta" element={
             <PrivateRouteWithOnboarding><GoalWizard /></PrivateRouteWithOnboarding>
           } />
 
-          {/* ── MÓDULO USUÁRIOS ───────────────────────────────────────────── */}
+          {/* Modulo Usuarios */}
           <Route path="/usuarios" element={
             <PrivateRouteWithOnboarding><Usuarios /></PrivateRouteWithOnboarding>
           } />
 
-          {/* ── Módulos placeholder ───────────────────────────────────────── */}
-          <Route path="/empresas" element={<PrivateRouteWithOnboarding><Empresas /></PrivateRouteWithOnboarding>} />
-          <Route path="/unidades"       element={<PrivateRouteWithOnboarding><Unidades /></PrivateRouteWithOnboarding>} />
-          <Route path="/historico"      element={<PrivateRouteWithOnboarding><PlaceholderModulo titulo="Histórico" icone="📈" /></PrivateRouteWithOnboarding>} />
+          {/* Modulo Empresas */}
+          <Route path="/empresas" element={
+            <PrivateRouteWithOnboarding><Empresas /></PrivateRouteWithOnboarding>
+          } />
+
+          {/* Modulo Unidades — CRUD completo implementado */}
+          <Route path="/unidades" element={
+            <PrivateRouteWithOnboarding><Unidades /></PrivateRouteWithOnboarding>
+          } />
+
+          {/* Modulos placeholder */}
+          <Route path="/historico"      element={<PrivateRouteWithOnboarding><PlaceholderModulo titulo="Historico" icone="📈" /></PrivateRouteWithOnboarding>} />
           <Route path="/resultados"     element={<PrivateRouteWithOnboarding><PlaceholderModulo titulo="Resultados" icone="📊" /></PrivateRouteWithOnboarding>} />
           <Route path="/justificativas" element={<PrivateRouteWithOnboarding><PlaceholderModulo titulo="Justificativas" icone="📝" /></PrivateRouteWithOnboarding>} />
           <Route path="/termo"          element={<PrivateRouteWithOnboarding><PlaceholderModulo titulo="Termo de Compromisso" icone="📄" /></PrivateRouteWithOnboarding>} />
           <Route path="/pacotes"        element={<PrivateRouteWithOnboarding><PlaceholderModulo titulo="Pacotes de Assinatura" icone="📦" /></PrivateRouteWithOnboarding>} />
           <Route path="/saldo"          element={<PrivateRouteWithOnboarding><PlaceholderModulo titulo="Saldo" icone="💰" /></PrivateRouteWithOnboarding>} />
           <Route path="/financeiro"     element={<PrivateRouteWithOnboarding><PlaceholderModulo titulo="Financeiro" icone="💳" /></PrivateRouteWithOnboarding>} />
-          <Route path="/outros"         element={<PrivateRouteWithOnboarding><PlaceholderModulo titulo="Outras Configurações" icone="🔧" /></PrivateRouteWithOnboarding>} />
+          <Route path="/outros"         element={<PrivateRouteWithOnboarding><PlaceholderModulo titulo="Outras Configuracoes" icone="🔧" /></PrivateRouteWithOnboarding>} />
           <Route path="/quem-somos"     element={<PlaceholderModulo titulo="Quem Somos" icone="🏅" publico />} />
           <Route path="/conceitos"      element={<PlaceholderModulo titulo="Conceitos MetasPro" icone="💡" publico />} />
           <Route path="/contato"        element={<PlaceholderModulo titulo="Contato" icone="📞" publico />} />
 
-          {/* ── Raiz ─────────────────────────────────────────────────────── */}
+          {/* Raiz */}
           <Route path="/" element={
             getToken() ? <Navigate to="/inicial" /> : <Navigate to="/login" />
           } />
 
-          {/* ── Fallback ─────────────────────────────────────────────────── */}
+          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" />} />
 
         </Routes>
@@ -152,7 +157,7 @@ export default function App() {
   );
 }
 
-// ─── Placeholder genérico para módulos em desenvolvimento ────────────────────
+// Placeholder generico para modulos em desenvolvimento
 function PlaceholderModulo({ titulo, icone, publico }) {
   const { useNavigate, useSearchParams } = require('react-router-dom');
   // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -198,7 +203,7 @@ function PlaceholderModulo({ titulo, icone, publico }) {
             border: '1.5px solid #e2e8f0', borderRadius: 8,
             color: '#475569', fontSize: 13, cursor: 'pointer',
           }}>
-            ← Voltar
+            Voltar
           </button>
         </nav>
 
@@ -224,7 +229,7 @@ function PlaceholderModulo({ titulo, icone, publico }) {
               </div>
             )}
             <p style={{ color: '#94a3b8', fontSize: 14, lineHeight: 1.7, marginBottom: 28 }}>
-              {acaoInfo ? acaoInfo.desc : 'Este módulo está em desenvolvimento e estará disponível em breve.'}
+              {acaoInfo ? acaoInfo.desc : 'Este modulo esta em desenvolvimento e estara disponivel em breve.'}
             </p>
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -232,7 +237,7 @@ function PlaceholderModulo({ titulo, icone, publico }) {
               borderRadius: 8, padding: '8px 16px',
               fontSize: 12, color: '#713f12',
             }}>
-              🚧 Em desenvolvimento — funcionalidade disponível em breve
+              Em desenvolvimento — funcionalidade disponivel em breve
             </div>
           </div>
         </div>
