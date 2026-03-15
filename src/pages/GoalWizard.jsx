@@ -40,6 +40,7 @@ const PRESSOES = [
 const INITIAL = {
   unidade_id: '', nome_meta: '', objetivo_descritivo: '',
   direcao: '', periodicidade: '', nivel_pressao: '', historico: '',
+  peso: '',
 };
 
 // ─── Indicador de Etapas ──────────────────────────────────────────────────────
@@ -176,6 +177,7 @@ export default function GoalWizard() {
             periodicidade:        m.periodicidade     || '',
             nivel_pressao:        m.nivel_pressao ? String(m.nivel_pressao) : '',
             historico:            (m.historico || []).join(', '),
+            peso:                 m.peso != null ? String(m.peso) : '',
           });
           setIsEdit(true);
         }
@@ -218,6 +220,7 @@ export default function GoalWizard() {
         periodicidade:       form.periodicidade,
         nivel_pressao:       pressaoMap[form.nivel_pressao],
         historico,
+        peso:                form.peso !== '' ? Number(form.peso) : null,
         editId: editId || undefined,
       });
       setResult(data);
@@ -471,6 +474,33 @@ export default function GoalWizard() {
                     onBlur={e => e.target.style.borderColor = T.border}
                   />
                 </div>
+
+                <div style={{ marginTop: 16 }}>
+                  <label style={labelSt}>
+                    Peso no Portfólio (%)
+                    <span style={{ fontWeight: 400, color: T.textDim, marginLeft: 6 }}>opcional</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    placeholder="Ex: 30 — indica 30% do portfólio de metas"
+                    value={form.peso}
+                    onChange={e => {
+                      const v = e.target.value;
+                      if (v === '' || (Number(v) >= 0 && Number(v) <= 100)) {
+                        setForm({ ...form, peso: v });
+                      }
+                    }}
+                    style={inputSt}
+                    onFocus={e => e.target.style.borderColor = T.borderFocus}
+                    onBlur={e => e.target.style.borderColor = T.border}
+                  />
+                  <p style={{ fontSize: 11, color: T.textDim, marginTop: 4, fontFamily: T.fontBody }}>
+                    Define a importância relativa desta meta no conjunto de metas da unidade. A soma dos pesos deve totalizar 100%.
+                  </p>
+                </div>
               </div>
             )}
 
@@ -563,6 +593,7 @@ export default function GoalWizard() {
                     { label: 'Direção',        value: form.direcao           },
                     { label: 'Periodicidade',  value: form.periodicidade     },
                     { label: 'Nível Pressão',  value: form.nivel_pressao     },
+                    { label: 'Peso (%)',       value: form.peso !== '' ? `${form.peso}%` : '—' },
                     { label: 'Histórico',      value: form.historico ? `${form.historico.split(/[\s,;]+/).filter(v=>v!=='').length} valores` : '—' },
                   ].map(item => (
                     <div key={item.label} style={{
