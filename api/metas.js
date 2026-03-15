@@ -111,6 +111,7 @@ async function salvarMeta(client, { usuarioId, payload, aiResult, calcResult }) 
   const {
     nome_meta, unidade_id, objetivo_descritivo, abrangencia,
     apresentacao, direcao, periodicidade_resultado, nivel_pressao, historico,
+    peso,
   } = payload;
 
   // 1. Configuração da meta
@@ -118,14 +119,15 @@ async function salvarMeta(client, { usuarioId, payload, aiResult, calcResult }) 
     `INSERT INTO configuracoes_metas
        (unidade_id, nome_meta, objetivo_descritivo, abrangencia, tipo,
         direcao, nivel_pressao, apresentacao, periodicidade_resultado,
-        periodicidade_controle)
-     VALUES ($1,$2,$3,$4,'QUANTITATIVA',$5,$6,$7,$8,$9)
+        periodicidade_controle, peso)
+     VALUES ($1,$2,$3,$4,'QUANTITATIVA',$5,$6,$7,$8,$9,$10)
      RETURNING id`,
     [
       unidade_id, nome_meta, objetivo_descritivo || null,
       abrangencia || 'OPERACIONAL', direcao,
       PRESSURE_LEVELS[nivel_pressao], apresentacao || 'NUMERO',
       periodicidade_resultado, periodicidade_resultado,
+      peso != null ? Number(peso) : null,
     ]
   );
   const configId = cfgRes.rows[0].id;
@@ -357,6 +359,7 @@ module.exports = async function handler(req, res) {
         direcao:                 cfg.direcao,
         periodicidade_resultado: cfg.periodicidade_resultado,
         nivel_pressao_label:     nivelLabel,
+        peso:                    cfg.peso != null ? Number(cfg.peso) : null,
         historico:               histRes.rows.map(r => Number(r.valor)),
       });
 
@@ -375,7 +378,7 @@ module.exports = async function handler(req, res) {
         nome_meta, unidade_id, historico,
         direcao, nivel_pressao,
         objetivo_descritivo, abrangencia, apresentacao,
-        periodicidade_resultado,
+        periodicidade_resultado, peso,
       } = req.body || {};
 
       // Validações
@@ -417,7 +420,7 @@ module.exports = async function handler(req, res) {
             nome_meta, unidade_id, objetivo_descritivo,
             abrangencia, apresentacao, direcao: direcaoUpper,
             periodicidade_resultado, nivel_pressao: pressaoUpper,
-            historico: validNums,
+            historico: validNums, peso,
           },
           aiResult,
           calcResult,
